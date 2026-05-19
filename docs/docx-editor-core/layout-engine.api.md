@@ -812,6 +812,4 @@ export type TextRun = RunFormatting & {
 // @public (undocumented)
 export type WrapTextDirection = 'bothSides' | 'left' | 'right' | 'largest';
 
-// (No @packageDocumentation comment for this package)
-
 ```

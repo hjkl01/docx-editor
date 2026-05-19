@@ -220,6 +220,4 @@ export interface TextMeasurement {
 // @public
 export function twipsToPx(twips: number): number;
 
-// (No @packageDocumentation comment for this package)
-
 ```

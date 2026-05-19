@@ -313,6 +313,4 @@ export function t(block: ParagraphBlock, line: MeasuredLine): Run[];
 // @public
 export function u(value: string): ImageLayoutTarget | undefined;
 
-// (No @packageDocumentation comment for this package)
-
 ```

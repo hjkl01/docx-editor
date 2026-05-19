@@ -222,6 +222,4 @@ export const TEXTBOX_CLASS_NAMES: {
 // @public
 export function toolbarValueToLayoutTarget(value: string): ImageLayoutTarget | undefined;
 
-// (No @packageDocumentation comment for this package)
-
 ```
