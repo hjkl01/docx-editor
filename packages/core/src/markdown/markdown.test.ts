@@ -380,6 +380,19 @@ describe('toMarkdownPaged', () => {
     expect(result.warnings).toContain('document has no content');
   });
 
+  test('warns when a substantial doc has zero pagination signals', () => {
+    const many: Paragraph[] = [];
+    for (let i = 0; i < 30; i++) many.push(p(`line ${i}`));
+    const result = toMarkdownPaged(doc(many));
+    expect(result.pages.length).toBe(1);
+    expect(result.warnings.some((w) => w.startsWith('no pagination signals'))).toBe(true);
+  });
+
+  test('short docs with no signals are not warned about', () => {
+    const result = toMarkdownPaged(doc([p('a'), p('b'), p('c')]));
+    expect(result.warnings.some((w) => w.startsWith('no pagination signals'))).toBe(false);
+  });
+
   test('emits header/footer when opts.headerFooter !== strip', () => {
     const header: HeaderFooter = {
       type: 'header',

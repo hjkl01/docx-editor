@@ -81,6 +81,14 @@ function renderPagedSync(
     return { pages: [], combined: '', images: ctx.images, warnings: ctx.warnings };
   }
   const pages = splitIntoPages(blocks);
+  // If a substantial doc has zero pagination signals, the whole body lands
+  // on one page. Surface that explicitly so callers don't silently get a
+  // single-page result when they expected multi-page output.
+  if (pages.length === 1 && hasSubstantialBody(blocks) && !hasAnyBreakSignal(blocks)) {
+    ctx.warnings.push(
+      'no pagination signals found (renderedPageBreakBefore, explicit page breaks, or section breaks). Document renders as a single page. Open the .docx in Word once and resave to bake in pagination, or use toMarkdown for continuous output.'
+    );
+  }
   const renderedPages: Array<{ pageNumber: number; markdown: string }> = [];
 
   pages.forEach((pageBlocks, idx) => {
@@ -209,6 +217,29 @@ function paragraphVisibleText(para: Paragraph): string {
 function isPureBreakParagraph(para: Paragraph): boolean {
   if (!containsExplicitPageBreak(para)) return false;
   return paragraphVisibleText(para).trim() === '';
+}
+
+/** Did the body carry any pagination signal the heuristic could act on? */
+function hasAnyBreakSignal(blocks: BlockContent[]): boolean {
+  for (const b of blocks) {
+    if (b.type !== 'paragraph') continue;
+    if (startsNewPage(b) || containsExplicitPageBreak(b)) return true;
+  }
+  return false;
+}
+
+/**
+ * Pick a threshold below which a single-page result is unremarkable: a 3-line
+ * memo really is one page. The 25-paragraph floor approximates "more than a
+ * page of body content" without needing actual layout measurement.
+ */
+function hasSubstantialBody(blocks: BlockContent[]): boolean {
+  let paraCount = 0;
+  for (const b of blocks) {
+    if (b.type === 'paragraph') paraCount += 1;
+    if (paraCount >= 25) return true;
+  }
+  return false;
 }
 
 function resolveHeaderFooter(
