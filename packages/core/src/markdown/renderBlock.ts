@@ -41,13 +41,11 @@ export function renderBlocks(
       }
       prevWasListItem = false;
     } else if (block.type === 'blockSdt') {
-      const sdt = block as { type: 'blockSdt'; content?: BlockContent[] };
-      if (Array.isArray(sdt.content)) {
-        const nested = renderBlocks(ctx, pkg, sdt.content);
-        if (nested) {
-          if (out.length) out.push('');
-          out.push(nested);
-        }
+      // `BlockSdt.content` is `(Paragraph | Table)[]` — a subset of BlockContent.
+      const nested = renderBlocks(ctx, pkg, block.content);
+      if (nested) {
+        if (out.length) out.push('');
+        out.push(nested);
       }
     }
   }

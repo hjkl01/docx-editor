@@ -21,11 +21,12 @@ import type {
   Document,
   HeaderFooter,
   Paragraph,
-  Run,
 } from '../types/document';
 import { renderBlocks } from './renderBlock';
 import { wrapHeaderFooter } from './annotations';
-import { badInputError, isDocument } from './index';
+import { badInputError, isDocument } from './input';
+import { newContext } from './context';
+import { appendTrailers } from './trailers';
 import type { PagedMarkdownOptions, PagedMarkdownResult, RenderContext } from './types';
 import { parseDocx } from '../docx/parser';
 
@@ -72,7 +73,7 @@ function renderPagedSync(
   doc: Document,
   opts: PagedMarkdownOptions | undefined
 ): PagedMarkdownResult {
-  const ctx = newPagedContext(opts ?? {});
+  const ctx = newContext(opts ?? {});
   const blocks = doc.package.document.content;
   if (!blocks.length) {
     if (doc.warnings) ctx.warnings.unshift(...doc.warnings);
@@ -112,68 +113,19 @@ function renderPagedSync(
     });
   });
 
-  if (ctx.opts.footnotes === 'end' && ctx.footnoteRefs.length) {
-    const refs = ctx.footnoteRefs
-      .map(({ refId, markerNumber }) => {
-        const note = doc.package.footnotes?.find((f) => f.id === refId);
-        const text = note
-          ? renderBlocks(ctx, doc.package, note.content).replace(/\n+/g, ' ').trim()
-          : '';
-        return `[^${markerNumber}]: ${text}`;
-      })
-      .join('\n');
-    if (renderedPages.length) {
-      renderedPages[renderedPages.length - 1].markdown += '\n\n' + refs;
-    }
-  }
-
-  // Comments sidecar appended to last page
-  if (ctx.opts.comments === 'sidecar' && ctx.commentRefs.length) {
-    const lines = ['## Comments'];
-    for (const { commentId, markerNumber } of ctx.commentRefs) {
-      const c = doc.package.document.comments?.find((cm) => cm.id === commentId);
-      const author = c?.author ? `${c.author}: ` : '';
-      const text = c
-        ? c.content
-            .map((p) =>
-              p.content
-                .map((cc) =>
-                  cc.type === 'run'
-                    ? cc.content.map((x) => (x.type === 'text' ? x.text : '')).join('')
-                    : ''
-                )
-                .join('')
-            )
-            .join(' ')
-            .trim()
-        : '';
-      lines.push(`[^c${markerNumber}]: ${author}${text}`);
-    }
-    if (renderedPages.length) {
-      renderedPages[renderedPages.length - 1].markdown += '\n\n' + lines.join('\n');
-    }
-  }
-
-  // Hyperlink ref list appended to last page
-  if (ctx.opts.hyperlinks === 'reference' && ctx.hyperlinkRefs.length) {
-    const refs = ctx.hyperlinkRefs
-      .map(({ href, refNumber }) => `[${refNumber}]: ${href}`)
-      .join('\n');
-    if (renderedPages.length) {
-      renderedPages[renderedPages.length - 1].markdown += '\n\n' + refs;
-    }
+  // Append footnotes / hyperlink refs / comments sidecar to the LAST page so
+  // they show up exactly once in `combined`. Same emission logic as unpaged.
+  if (renderedPages.length) {
+    const last = renderedPages[renderedPages.length - 1];
+    const withTrailers = appendTrailers(ctx, doc, last.markdown);
+    if (withTrailers !== last.markdown) last.markdown = withTrailers;
   }
 
   const combined = renderedPages
     .map((p, i) => (i === 0 ? p.markdown : `<!-- page ${p.pageNumber} -->\n\n${p.markdown}`))
     .join('\n\n');
 
-  return {
-    pages: renderedPages,
-    combined,
-    images: ctx.images,
-    warnings: ctx.warnings,
-  };
+  return { pages: renderedPages, combined, images: ctx.images, warnings: ctx.warnings };
 }
 
 /**
@@ -238,9 +190,7 @@ function startsNewPage(para: Paragraph): boolean {
 
 function containsExplicitPageBreak(para: Paragraph): boolean {
   return para.content.some(
-    (c) =>
-      c.type === 'run' &&
-      (c as Run).content.some((r) => r.type === 'break' && r.breakType === 'page')
+    (c) => c.type === 'run' && c.content.some((r) => r.type === 'break' && r.breakType === 'page')
   );
 }
 
@@ -248,7 +198,7 @@ function paragraphVisibleText(para: Paragraph): string {
   let out = '';
   for (const item of para.content) {
     if (item.type !== 'run') continue;
-    for (const r of (item as Run).content) {
+    for (const r of item.content) {
       if (r.type === 'text') out += r.text;
       else if (r.type === 'symbol') out += r.char;
     }
@@ -301,42 +251,21 @@ function resolveHeaderFooter(
     (isFirstPage && section?.footers?.get('first')) || section?.footers?.get('default');
 
   return {
+    // The package-map fallback only fires when there is exactly one header
+    // in the document. Multi-section docs without proper references would
+    // otherwise surface a wrong section's header on every page.
     header:
       sectionHeader ??
       pickViaRefs(sectionProps?.headerReferences, pkg.headers, isFirstPage) ??
-      // Last resort: the first header in the package map. Most one-section
-      // documents only have one header.
-      pkg.headers?.values().next().value,
+      (pkg.headers && pkg.headers.size === 1 ? pkg.headers.values().next().value : undefined),
     footer:
       sectionFooter ??
       pickViaRefs(sectionProps?.footerReferences, pkg.footers, isFirstPage) ??
-      pkg.footers?.values().next().value,
+      (pkg.footers && pkg.footers.size === 1 ? pkg.footers.values().next().value : undefined),
   };
 }
 
 function shouldEmitHeaderFooter(ctx: RenderContext, pageNumber: number): boolean {
   if (ctx.opts.headerFooter === 'first-page') return pageNumber === 1;
   return ctx.opts.headerFooter === 'all';
-}
-
-function newPagedContext(opts: PagedMarkdownOptions): RenderContext {
-  return {
-    opts: {
-      annotations: opts.annotations ?? 'html',
-      trackedChanges: opts.trackedChanges ?? 'annotate',
-      comments: opts.comments ?? 'inline',
-      hyperlinks: opts.hyperlinks ?? 'inline',
-      footnotes: opts.footnotes ?? 'end',
-      headerFooter: opts.headerFooter ?? 'strip',
-      imagePath: opts.imagePath,
-    },
-    images: new Map(),
-    imagesByPath: new Map(),
-    warnings: [],
-    footnoteRefs: [],
-    commentRefs: [],
-    hyperlinkRefs: [],
-    imageCounter: 0,
-    pageNumber: undefined,
-  };
 }

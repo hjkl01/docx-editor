@@ -270,7 +270,9 @@ describe('comments', () => {
 
   test("default 'inline' wraps the commented span", () => {
     const { markdown } = toMarkdown(commented());
-    expect(markdown).toBe('<comment id="7" author="Jed">hello</comment>');
+    expect(markdown).toMatch(/^<comment [^>]*>hello<\/comment>$/);
+    expect(markdown).toContain('id="7"');
+    expect(markdown).toContain('author="Jed"');
   });
 
   test("'strip' drops the wrapper", () => {

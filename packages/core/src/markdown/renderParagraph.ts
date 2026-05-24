@@ -25,23 +25,20 @@ export function renderParagraph(
   const inline = renderParagraphInline(ctx, pkg, para.content, para.paraId);
   const styleId = para.formatting?.styleId;
 
-  // Heading?
   if (isHeadingStyle(styleId)) {
+    if (!inline) return ''; // Drop empty headings — `#` alone is just literal text.
     const level = parseHeadingLevel(styleId) ?? 1;
     const hashes = '#'.repeat(Math.max(1, Math.min(6, level)));
-    return `${hashes} ${inline}`.trimEnd();
+    return `${hashes} ${inline}`;
   }
 
-  // List item?
   if (para.listRendering) {
     return renderListItem(para, inline);
   }
 
-  // Code block (no native code-block detection; if the entire paragraph uses
-  // a monospace run, our run renderer already wrapped it in backticks).
-
-  // Quote block? Word uses a "Quote" / "IntenseQuote" style.
-  if (styleId && /quote/i.test(styleId)) {
+  // Word's built-in quote styles: `Quote`, `IntenseQuote`. Avoid loose matches
+  // like `/quote/i` that catch `BlockQuoteCustom` or even `NoQuote`.
+  if (styleId === 'Quote' || styleId === 'IntenseQuote') {
     return inline
       .split('\n')
       .map((line) => `> ${line}`)

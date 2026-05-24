@@ -28,52 +28,29 @@ import type {
 import { renderParagraph } from './renderParagraph';
 import { escapeTableCell } from './escape';
 import { registerImage } from './images';
+import { pushWarning } from './context';
 import type { RenderContext } from './types';
 
-interface RenderTableOptions {
-  /** Rows to slice. Defaults to all rows in the table. */
-  rowRange?: { from: number; to: number };
-  /** When true, the first row is treated as the header row. Default true. */
-  firstRowIsHeader?: boolean;
-}
-
-/**
- * Render a table. Caller picks the row range; paged mode uses this to slice
- * a `TableFragment`.
- */
+/** Render a `Table` as markdown. Picks GFM vs HTML based on cell features. */
 export function renderTable(
   ctx: RenderContext,
   pkg: DocxPackage | undefined,
-  table: Table,
-  options: RenderTableOptions = {}
+  table: Table
 ): string {
-  if (!table.rows.length) return '';
-  const from = options.rowRange?.from ?? 0;
-  const to = options.rowRange?.to ?? table.rows.length;
-  const rows = table.rows.slice(from, to);
+  const { rows } = table;
   if (!rows.length) return '';
-
-  if (needsHtmlFallback(table, rows)) {
-    return renderHtmlTable(ctx, pkg, rows, options.firstRowIsHeader !== false);
-  }
-  return renderGfmTable(ctx, pkg, rows, options.firstRowIsHeader !== false);
+  if (needsHtmlFallback(rows)) return renderHtmlTable(ctx, pkg, rows, true);
+  return renderGfmTable(ctx, pkg, rows, true);
 }
 
-// ---------------------------------------------------------------------------
-// Fallback detector
-// ---------------------------------------------------------------------------
-
-function needsHtmlFallback(table: Table, rows: TableRow[]): boolean {
+function needsHtmlFallback(rows: TableRow[]): boolean {
   for (const row of rows) {
     for (const cell of row.cells) {
       if ((cell.formatting?.gridSpan ?? 1) > 1) return true;
       if (cell.formatting?.vMerge) return true;
-      for (const block of cell.content) {
-        if (block.type === 'table') return true;
-      }
+      if (cell.content.some((b) => b.type === 'table')) return true;
     }
   }
-  void table;
   return false;
 }
 
@@ -147,36 +124,59 @@ function renderHtmlTable(
   rows.forEach((row, rowIdx) => {
     const tag = firstRowIsHeader && rowIdx === 0 ? 'th' : 'td';
     out.push('  <tr>');
-    row.cells.forEach((cell, cellIdx) => {
-      if (cell.formatting?.vMerge === 'continue') return;
+    let gridCol = 0;
+    for (const cell of row.cells) {
       const colspan = cell.formatting?.gridSpan ?? 1;
-      const rowspan = countRowSpan(rows, rowIdx, cellIdx);
-      const attrs: string[] = [];
-      if (colspan > 1) attrs.push(`colspan="${colspan}"`);
-      if (rowspan > 1) attrs.push(`rowspan="${rowspan}"`);
-      const attrStr = attrs.length ? ' ' + attrs.join(' ') : '';
-      out.push(`    <${tag}${attrStr}>${renderHtmlCell(ctx, pkg, cell)}</${tag}>`);
-    });
+      if (cell.formatting?.vMerge !== 'continue') {
+        const rowspan = countRowSpan(rows, rowIdx, gridCol, colspan);
+        const attrs: string[] = [];
+        if (colspan > 1) attrs.push(`colspan="${colspan}"`);
+        if (rowspan > 1) attrs.push(`rowspan="${rowspan}"`);
+        const attrStr = attrs.length ? ' ' + attrs.join(' ') : '';
+        out.push(`    <${tag}${attrStr}>${renderHtmlCell(ctx, pkg, cell)}</${tag}>`);
+      }
+      gridCol += colspan;
+    }
     out.push('  </tr>');
   });
   out.push('</table>');
   return out.join('\n');
 }
 
-function countRowSpan(rows: TableRow[], rowIdx: number, cellIdx: number): number {
-  // The cell at `rows[rowIdx].cells[cellIdx]` is the merge anchor (vMerge
-  // !== 'continue'). Count how many subsequent rows have `vMerge: 'continue'`
-  // at the same column index.
+/**
+ * Count how many rows beyond `rowIdx` have a `vMerge: 'continue'` cell
+ * aligned to the same grid column as the anchor.
+ *
+ * Cells are indexed by array position, but vertical merges align on the
+ * visual grid column. If a row above has a horizontal merge (`gridSpan > 1`)
+ * the array indices shift, so we walk each subsequent row by cumulative
+ * gridSpan to find the column-aligned target.
+ */
+function countRowSpan(rows: TableRow[], rowIdx: number, gridCol: number, colspan: number): number {
   let span = 1;
   for (let r = rowIdx + 1; r < rows.length; r++) {
-    const next = rows[r].cells[cellIdx];
-    if (next && next.formatting?.vMerge === 'continue') {
+    const target = cellAtGridColumn(rows[r], gridCol);
+    if (
+      target &&
+      target.formatting?.vMerge === 'continue' &&
+      (target.formatting?.gridSpan ?? 1) === colspan
+    ) {
       span += 1;
     } else {
       break;
     }
   }
   return span;
+}
+
+function cellAtGridColumn(row: TableRow, gridCol: number): TableCell | undefined {
+  let col = 0;
+  for (const cell of row.cells) {
+    if (col === gridCol) return cell;
+    col += cell.formatting?.gridSpan ?? 1;
+    if (col > gridCol) return undefined;
+  }
+  return undefined;
 }
 
 function renderHtmlCell(ctx: RenderContext, pkg: DocxPackage | undefined, cell: TableCell): string {
@@ -246,6 +246,21 @@ function renderHtmlInline(
         out += renderHtmlChildren(ctx, pkg, runs, paraId);
         break;
       }
+      case 'inlineSdt':
+        if (item.content) {
+          out += renderHtmlInline(ctx, pkg, item.content as ParagraphContent[], paraId);
+        }
+        break;
+      case 'bookmarkStart':
+      case 'bookmarkEnd':
+      case 'commentRangeStart':
+      case 'commentRangeEnd':
+      case 'moveFromRangeStart':
+      case 'moveFromRangeEnd':
+      case 'moveToRangeStart':
+      case 'moveToRangeEnd':
+        // Range markers carry no visible payload inside table cells.
+        break;
       default:
         break;
     }
@@ -308,7 +323,7 @@ function renderHtmlRun(
           text += `<img src="${escapeHtml(item.image.src)}" alt="${alt}">`;
           break;
         }
-        ctx.warnings.push(`image rId=${item.image.rId} not resolvable`);
+        pushWarning(ctx, `image rId=${item.image.rId} not resolvable`);
         break;
       }
       case 'footnoteRef':

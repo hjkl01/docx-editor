@@ -32,38 +32,10 @@ function extFor(mimeType: string, fallback: string): string {
 }
 
 function bytesToBase64(bytes: Uint8Array): string {
-  if (typeof Buffer !== 'undefined') {
-    return Buffer.from(bytes).toString('base64');
-  }
+  if (typeof Buffer !== 'undefined') return Buffer.from(bytes).toString('base64');
   let binary = '';
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  // btoa is browser/web; falls back to a manual encoder if absent.
-  if (typeof btoa !== 'undefined') return btoa(binary);
-  return manualBase64Encode(bytes);
-}
-
-const BASE64_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-function manualBase64Encode(bytes: Uint8Array): string {
-  let out = '';
-  let i = 0;
-  for (; i + 2 < bytes.length; i += 3) {
-    const n = (bytes[i] << 16) | (bytes[i + 1] << 8) | bytes[i + 2];
-    out += BASE64_ALPHABET[(n >> 18) & 63];
-    out += BASE64_ALPHABET[(n >> 12) & 63];
-    out += BASE64_ALPHABET[(n >> 6) & 63];
-    out += BASE64_ALPHABET[n & 63];
-  }
-  if (i < bytes.length) {
-    const remaining = bytes.length - i;
-    const n = remaining === 2 ? (bytes[i] << 16) | (bytes[i + 1] << 8) : bytes[i] << 16;
-    out += BASE64_ALPHABET[(n >> 18) & 63];
-    out += BASE64_ALPHABET[(n >> 12) & 63];
-    out += remaining === 2 ? BASE64_ALPHABET[(n >> 6) & 63] : '=';
-    out += '=';
-  }
-  return out;
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary);
 }
 
 function toUint8(data: ArrayBuffer | Uint8Array): Uint8Array {

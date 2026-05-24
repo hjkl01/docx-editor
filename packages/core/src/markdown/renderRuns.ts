@@ -27,6 +27,7 @@ import type {
 import { registerImage } from './images';
 import { escapeInline, escapeLinkUrl, escapeAltText } from './escape';
 import { wrapInsertion, wrapDeletion, wrapMoveFrom, wrapMoveTo, wrapComment } from './annotations';
+import { pushWarning } from './context';
 import type { RenderContext } from './types';
 
 /**
@@ -154,11 +155,11 @@ function renderRunContent(
           out += `![${escapeAltText(alt)}](${item.image.src})`;
           break;
         }
-        ctx.warnings.push(`image rId=${item.image.rId} not resolvable`);
+        pushWarning(ctx, `image rId=${item.image.rId} not resolvable`);
         break;
       }
       case 'shape':
-        ctx.warnings.push('shape not representable in markdown');
+        pushWarning(ctx, 'shape not representable in markdown');
         break;
       case 'fieldChar':
       case 'instrText':
@@ -201,7 +202,7 @@ function renderHyperlink(
   if (!inner) return '';
   const href = link.href ?? (link.anchor ? `#${link.anchor}` : '');
   if (!href) {
-    ctx.warnings.push('hyperlink missing href and anchor; rendered as plain text');
+    pushWarning(ctx, 'hyperlink missing href and anchor; rendered as plain text');
     return inner;
   }
   if (ctx.opts.hyperlinks === 'reference') {
@@ -253,11 +254,6 @@ function renderTrackedWrapper(
 interface CommentSlot {
   start: number;
   comment?: Comment;
-}
-
-/** Look up a comment by id in the document body. */
-function commentById(pkg: DocxPackage | undefined, id: number): Comment | undefined {
-  return pkg?.document.comments?.find((c) => c.id === id);
 }
 
 /**
@@ -315,9 +311,10 @@ export function renderParagraphInline(
         break;
       }
       case 'inlineSdt': {
-        const sdtContent = (item as { content?: ParagraphContent[] }).content;
-        if (Array.isArray(sdtContent)) {
-          out += renderParagraphInline(ctx, pkg, sdtContent, paraId);
+        // `InlineSdt.content` is a strict subset of `ParagraphContent`
+        // (Run | Hyperlink | SimpleField | ComplexField | InlineSdt | MathEquation).
+        if (item.content) {
+          out += renderParagraphInline(ctx, pkg, item.content as ParagraphContent[], paraId);
         }
         break;
       }
@@ -348,7 +345,7 @@ function handleCommentStart(
     openComments.push({ start: startPos, comment: undefined });
     return '';
   }
-  const comment = commentById(pkg, marker.id);
+  const comment = pkg?.document.comments?.find((c) => c.id === marker.id);
   openComments.push({ start: startPos, comment });
   return '';
 }

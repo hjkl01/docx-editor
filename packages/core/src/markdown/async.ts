@@ -129,19 +129,22 @@ async function substituteImages(
         return [virtualPath, ref, result] as const;
       } catch (err) {
         const cause = err instanceof Error ? err.message : String(err);
-        warnings.push(`imageHandler failed for ${virtualPath}: ${cause}`);
+        const msg = `imageHandler failed for ${virtualPath}: ${cause}`;
+        if (!warnings.includes(msg)) warnings.push(msg);
         return [virtualPath, ref, null] as const;
       }
     })
   );
 
   let out = markdown;
-  for (const [virtualPath, ref, result] of replacements) {
+  for (const [virtualPath, , result] of replacements) {
     if (result === null) continue;
-    // Replace `![<alt>](<virtualPath>)` exactly. Alt is `[^\]]*` per CommonMark.
-    const pattern = new RegExp(`!\\[[^\\]]*\\]\\(${escapeRegExp(virtualPath)}\\)`, 'g');
-    out = out.replace(pattern, () => result);
-    void ref;
+    const escaped = escapeRegExp(virtualPath);
+    // Markdown form (default emit path).
+    out = out.replace(new RegExp(`!\\[[^\\]]*\\]\\(${escaped}\\)`, 'g'), () => result);
+    // HTML <img> form (emitted inside HTML-mode table cells, header/footer
+    // blocks, anywhere markdown wouldn't be re-parsed).
+    out = out.replace(new RegExp(`<img\\b[^>]*\\bsrc="${escaped}"[^>]*>`, 'g'), () => result);
   }
   return out;
 }

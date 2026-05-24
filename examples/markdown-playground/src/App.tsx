@@ -16,7 +16,7 @@ type Tracked = 'clean' | 'annotate';
 type Comments = 'strip' | 'inline' | 'sidecar';
 type Hyperlinks = 'inline' | 'reference';
 type Annotations = 'html' | 'pandoc' | 'strip';
-type Footnotes = 'inline' | 'end';
+type Footnotes = 'end';
 type HeaderFooter = 'strip' | 'first-page' | 'all';
 
 interface Options {
@@ -336,17 +336,6 @@ function Toolbar({ fileName, method, setMethod, opts, setOpts, result, onFile }:
         >
           <option value="inline">inline</option>
           <option value="reference">reference</option>
-        </select>
-      </label>
-
-      <label>
-        footnotes
-        <select
-          value={opts.footnotes}
-          onChange={(e) => update('footnotes', e.target.value as Footnotes)}
-        >
-          <option value="end">end</option>
-          <option value="inline">inline</option>
         </select>
       </label>
 

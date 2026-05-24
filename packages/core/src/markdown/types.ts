@@ -63,9 +63,9 @@ export interface MarkdownResult {
   /** Every image referenced in `markdown`, keyed by its virtual path. */
   images: Map<string, ImageRef>;
   /**
-   * Non-fatal diagnostics emitted during rendering: merged cells, nested
-   * tables flattened to text, shapes that can't be represented, etc.
-   * Deduped: each distinct message appears at most once.
+   * Non-fatal diagnostics emitted during rendering. Recurring messages
+   * (e.g. merged-cell warnings on a 200-cell table) are deduped: each
+   * distinct text appears at most once.
    */
   warnings: string[];
 }
@@ -85,7 +85,7 @@ export interface PagedMarkdownResult {
   combined: string;
   /** Every image referenced in any page, keyed by its virtual path. */
   images: Map<string, ImageRef>;
-  /** Non-fatal diagnostics, deduped. */
+  /** Non-fatal diagnostics. Recurring messages deduped. */
   warnings: string[];
 }
 
@@ -156,14 +156,10 @@ export interface MarkdownOptionsBase {
  */
 export interface MarkdownOptions extends MarkdownOptionsBase {
   /**
-   * Where footnote definitions land.
-   *
-   * - `'end'` (default): collected in a single block at the end of the
-   *   markdown.
-   * - `'inline'`: definition immediately after the paragraph that references
-   *   the footnote.
+   * Where footnote definitions land. Currently only `'end'` is supported.
+   * Reserved for future expansion to `'inline'` / `'per-page'` variants.
    */
-  footnotes?: 'inline' | 'end';
+  footnotes?: 'end';
 }
 
 /**
@@ -174,11 +170,10 @@ export interface MarkdownOptions extends MarkdownOptionsBase {
  */
 export interface PagedMarkdownOptions extends MarkdownOptionsBase {
   /**
-   * Where footnote definitions land. Paged mode currently collects footnote
-   * refs across all pages and emits them at the end of the last page; see
-   * {@link MarkdownOptions.footnotes}.
+   * Where footnote definitions land. Paged mode collects refs across all
+   * pages and emits them at the end of the last page.
    */
-  footnotes?: 'inline' | 'end';
+  footnotes?: 'end';
   /**
    * Whether to emit Word's page headers and footers around each page's
    * content (rendered with the wrapper chosen by `annotations`).
@@ -212,28 +207,34 @@ export type ImageHandler = (
   ctx: { virtualPath: string; pageNumber?: number }
 ) => Promise<string>;
 
+/** Resolved option values with defaults applied. Used internally. */
+export interface ResolvedOptions {
+  annotations: 'html' | 'pandoc' | 'strip';
+  trackedChanges: 'clean' | 'annotate';
+  comments: 'strip' | 'inline' | 'sidecar';
+  hyperlinks: 'inline' | 'reference';
+  footnotes: 'end';
+  /** Defaults to `'strip'` in non-paged mode. */
+  headerFooter: 'strip' | 'first-page' | 'all';
+  imagePath?: (info: ImageMeta) => string;
+}
+
 /**
  * Internal rendering context threaded through every `renderBlock` call.
- * Aggregates output side-channels: image map, warnings, footnote/comment/
- * hyperlink reference lists, image counter, and the current page number for
- * paged renders.
+ * Aggregates side-channel output: image map, warnings, footnote/comment/
+ * hyperlink reference lists, image counter, and (in paged renders) the
+ * current page number.
  *
  * Not part of the public surface; exported only so split renderer files
  * share the same shape.
  */
 export interface RenderContext {
-  /** Resolved option values with defaults applied. */
-  opts: Required<Omit<MarkdownOptionsBase, 'imagePath'>> & {
-    footnotes: 'inline' | 'end';
-    /** Defaults to `'strip'` in non-paged mode. */
-    headerFooter: 'strip' | 'first-page' | 'all';
-    imagePath?: (info: ImageMeta) => string;
-  };
+  opts: ResolvedOptions;
   /** Accumulated images keyed by virtual path. Returned to the caller. */
   images: Map<string, ImageRef>;
   /** Same images keyed by source `MediaFile.path` for dedupe on re-reference. */
   imagesByPath: Map<string, ImageRef>;
-  /** Diagnostics accumulator. Use `warnOnce` in renderTable to dedupe. */
+  /** Diagnostics accumulator. */
   warnings: string[];
   /** Footnote refs collected during this render, in document order. */
   footnoteRefs: Array<{ refId: number; markerNumber: number }>;
