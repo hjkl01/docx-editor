@@ -1,0 +1,48 @@
+/**
+ * Markdown escaping. Only characters that would change the parsed structure
+ * get escaped. Context-sensitive: pipes only matter inside table cells.
+ */
+
+/**
+ * Escape only characters that would change markdown structure mid-text:
+ *   - backslash, backtick, asterisk, brackets (always)
+ *   - underscore: only at word boundaries (emphasis trigger)
+ *   - angle brackets: only when they look like a tag/autolink
+ *
+ * Characters like `.` `-` `+` `#` `(` `)` `!` are only meaningful at line
+ * starts or in specific adjacency; we let the block-level renderer decide
+ * when to escape those.
+ */
+export function escapeInline(text: string): string {
+  let out = text.replace(/([\\`*\[\]])/g, '\\$1');
+  // Underscore as emphasis marker: only at word boundaries.
+  out = out.replace(/(^|\s)_/g, '$1\\_');
+  out = out.replace(/_(\s|$)/g, '\\_$1');
+  // Angle brackets that could start an HTML tag or autolink.
+  out = out.replace(/<([A-Za-z!\/?])/g, '\\<$1');
+  return out;
+}
+
+/**
+ * Cells use `|` as the column separator. Newlines inside a cell become `<br>`
+ * so the row stays on one line.
+ */
+export function escapeTableCell(text: string): string {
+  return text.replace(/\|/g, '\\|').replace(/\r?\n/g, '<br>');
+}
+
+/**
+ * Hyperlink URLs in inline form need parens balanced; we URL-encode the
+ * problematic characters rather than escape, so the link still resolves.
+ */
+export function escapeLinkUrl(url: string): string {
+  return url.replace(/[()<>"\s]/g, encodeURIComponent);
+}
+
+/**
+ * Alt text inside `![alt](url)`. Escape brackets so the link parser doesn't
+ * get confused, and collapse newlines so the alt stays single-line.
+ */
+export function escapeAltText(text: string): string {
+  return text.replace(/([\[\]])/g, '\\$1').replace(/\r?\n/g, ' ');
+}

@@ -108,6 +108,11 @@
       "import": "./dist/agent/index.mjs",
       "require": "./dist/agent/index.js"
     },
+    "./markdown": {
+      "types": "./dist/markdown/index.d.ts",
+      "import": "./dist/markdown/index.mjs",
+      "require": "./dist/markdown/index.js"
+    },
     "./layout-engine": {
       "types": "./dist/layout-engine/index.d.ts",
       "import": "./dist/layout-engine/index.mjs",

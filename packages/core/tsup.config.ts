@@ -32,6 +32,7 @@ export default defineConfig([
       'types/document': 'src/types/document.ts',
       'types/content': 'src/types/content.ts',
       'types/agentApi': 'src/types/agentApi.ts',
+      'markdown/index': 'src/markdown/index.ts',
       'layout-engine/index': 'src/layout-engine/index.ts',
       'layout-engine/types': 'src/layout-engine/types.ts',
       'layout-painter/index': 'src/layout-painter/index.ts',

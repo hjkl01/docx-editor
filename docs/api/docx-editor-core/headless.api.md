@@ -540,6 +540,30 @@ interface Image_2 {
 export { Image_2 as Image }
 
 // @public
+export type ImageHandler = (ref: ImageRef, ctx: {
+    virtualPath: string;
+    pageNumber?: number;
+}) => Promise<string>;
+
+// @public
+export interface ImageMeta {
+    alt?: string;
+    index: number;
+    mimeType: string;
+    originalPath: string;
+    pageNumber?: number;
+    paraId?: string;
+}
+
+// @public
+export interface ImageRef extends ImageMeta {
+    base64: string;
+    data: Uint8Array;
+    dataUrl: string;
+    virtualPath: string;
+}
+
+// @public
 export interface InsertHyperlinkCommand extends BaseCommand {
     displayText?: string;
     range: Range_2;
@@ -705,6 +729,27 @@ export interface LoadedDocument {
 }
 
 // @public
+export interface MarkdownOptions extends MarkdownOptionsBase {
+    footnotes?: 'inline' | 'end';
+}
+
+// @public
+export interface MarkdownOptionsBase {
+    annotations?: 'html' | 'pandoc' | 'strip';
+    comments?: 'strip' | 'inline' | 'sidecar';
+    hyperlinks?: 'inline' | 'reference';
+    imagePath?: (info: ImageMeta) => string;
+    trackedChanges?: 'clean' | 'annotate';
+}
+
+// @public
+export interface MarkdownResult {
+    images: Map<string, ImageRef>;
+    markdown: string;
+    warnings: string[];
+}
+
+// @public
 export interface McpSession {
     data: Map<string, unknown>;
     documents: Map<string, LoadedDocument>;
@@ -786,6 +831,23 @@ export interface MoveTo {
 export interface NumberingDefinitions {
     abstractNums: AbstractNumbering[];
     nums: NumberingInstance[];
+}
+
+// @public
+export interface PagedMarkdownOptions extends MarkdownOptionsBase {
+    footnotes?: 'inline' | 'end';
+    headerFooter?: 'strip' | 'first-page' | 'all';
+}
+
+// @public
+export interface PagedMarkdownResult {
+    combined: string;
+    images: Map<string, ImageRef>;
+    pages: Array<{
+        pageNumber: number;
+        markdown: string;
+    }>;
+    warnings: string[];
 }
 
 // @public
@@ -1341,6 +1403,28 @@ export interface Theme {
     };
     name?: string;
 }
+
+// @public
+export function toMarkdown(doc: Document_2, opts?: MarkdownOptions): MarkdownResult;
+
+// @public (undocumented)
+export function toMarkdown(buffer: ByteInput, opts?: MarkdownOptions): Promise<MarkdownResult>;
+
+// @public
+export function toMarkdownAsync(input: Document_2 | ByteInput$1, opts: MarkdownOptions & {
+    imageHandler: ImageHandler;
+}): Promise<MarkdownResult>;
+
+// @public
+export function toMarkdownPaged(doc: Document_2, opts?: PagedMarkdownOptions): PagedMarkdownResult;
+
+// @public (undocumented)
+export function toMarkdownPaged(buffer: ByteInput$2, opts?: PagedMarkdownOptions): Promise<PagedMarkdownResult>;
+
+// @public
+export function toMarkdownPagedAsync(input: Document_2 | ByteInput$1, opts: PagedMarkdownOptions & {
+    imageHandler: ImageHandler;
+}): Promise<PagedMarkdownResult>;
 
 // @public
 export interface TrackedChangeInfo {

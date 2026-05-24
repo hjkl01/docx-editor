@@ -14,7 +14,8 @@
     "examples/nuxt",
     "examples/remix",
     "examples/vite",
-    "examples/vue"
+    "examples/vue",
+    "examples/markdown-playground"
   ],
   "type": "module",
   "scripts": {

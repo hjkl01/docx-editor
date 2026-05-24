@@ -117,6 +117,10 @@ export default defineNuxtConfig({
 
 Full docs: [`packages/nuxt`](packages/nuxt).
 
+## Markdown export
+
+DOCX to Markdown with paged or continuous output. Structure preserved: tables, lists, hyperlinks, footnotes, comments, tracked changes. Try it: [`examples/markdown-playground`](examples/markdown-playground).
+
 ## Plugins
 
 ```tsx

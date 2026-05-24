@@ -117,6 +117,22 @@ export {
 } from './agent/text-utils';
 
 // ============================================================================
+// MARKDOWN EXPORT
+// ============================================================================
+
+export { toMarkdown, toMarkdownPaged, toMarkdownAsync, toMarkdownPagedAsync } from './markdown';
+export type {
+  ImageHandler,
+  ImageMeta,
+  ImageRef,
+  MarkdownOptions,
+  MarkdownOptionsBase,
+  MarkdownResult,
+  PagedMarkdownOptions,
+  PagedMarkdownResult,
+} from './markdown';
+
+// ============================================================================
 // PARSER / SERIALIZER
 // ============================================================================
 

@@ -49,17 +49,18 @@ Each subpath tree-shakes independently. Pick the smallest entry point that gives
 
 ## Subpath map
 
-| Building...                       | Import from                                                      | What you get                                                                       |
-| --------------------------------- | ---------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| A new framework adapter           | `./docx`, `./prosemirror/conversion`, `./prosemirror/extensions` | `parseDocx`, `toProseDoc` / `fromProseDoc`, `createStarterKit`, `ExtensionManager` |
-| Custom layout / rendering         | `./layout-engine`, `./layout-bridge`, `./layout-painter`         | `layoutDocument`, `mouseToPosition`, `renderPage`, `LayoutPainter`                 |
-| Editor commands and plugins       | `./prosemirror/commands`, `./prosemirror/plugins`                | Formatting, tables, suggestion mode, selection tracker                             |
-| Saving back to `.docx`            | `./docx`                                                         | `repackDocx`, `attemptSelectiveSave`                                               |
-| Headless agents (no UI)           | `./agent`                                                        | `DocumentAgent`, `executeCommand`, `AgentCommand` types                            |
-| An MCP server                     | `./mcp`                                                          | Model Context Protocol server scaffolding                                          |
-| Just unit/color/clipboard helpers | `./utils`                                                        | `twipsToPixels`, `resolveColor`, font loading, clipboard, selection helpers        |
-| Just a type                       | `./types/document`, `./types/content`, `./types/agentApi`        | `Document`, `Paragraph`, `Comment`, `AgentCommand`, ...                            |
-| Default editor stylesheet         | `./prosemirror/editor.css`                                       | Import once at the top of your app                                                 |
+| Building...                       | Import from                                                      | What you get                                                                                                                  |
+| --------------------------------- | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| A new framework adapter           | `./docx`, `./prosemirror/conversion`, `./prosemirror/extensions` | `parseDocx`, `toProseDoc` / `fromProseDoc`, `createStarterKit`, `ExtensionManager`                                            |
+| DOCX to Markdown                  | `./markdown`                                                     | `toMarkdown`, `toMarkdownPaged`, `toMarkdownAsync`. See [`examples/markdown-playground`](../../examples/markdown-playground). |
+| Custom layout / rendering         | `./layout-engine`, `./layout-bridge`, `./layout-painter`         | `layoutDocument`, `mouseToPosition`, `renderPage`, `LayoutPainter`                                                            |
+| Editor commands and plugins       | `./prosemirror/commands`, `./prosemirror/plugins`                | Formatting, tables, suggestion mode, selection tracker                                                                        |
+| Saving back to `.docx`            | `./docx`                                                         | `repackDocx`, `attemptSelectiveSave`                                                                                          |
+| Headless agents (no UI)           | `./agent`                                                        | `DocumentAgent`, `executeCommand`, `AgentCommand` types                                                                       |
+| An MCP server                     | `./mcp`                                                          | Model Context Protocol server scaffolding                                                                                     |
+| Just unit/color/clipboard helpers | `./utils`                                                        | `twipsToPixels`, `resolveColor`, font loading, clipboard, selection helpers                                                   |
+| Just a type                       | `./types/document`, `./types/content`, `./types/agentApi`        | `Document`, `Paragraph`, `Comment`, `AgentCommand`, ...                                                                       |
+| Default editor stylesheet         | `./prosemirror/editor.css`                                       | Import once at the top of your app                                                                                            |
 
 ## Stability
 
