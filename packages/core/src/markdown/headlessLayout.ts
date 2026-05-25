@@ -26,6 +26,7 @@ import { toProseDoc } from '../prosemirror/conversion/toProseDoc';
 import { toFlowBlocks } from '../layout-bridge/toFlowBlocks';
 import { measureParagraph, setCanvasContext } from '../layout-bridge/measuring';
 import { measureTableBlock } from '../layout-bridge/measureTable';
+import { registerOfficeSubstitutes } from './officeFonts';
 
 let canvasReady: Promise<boolean> | undefined;
 
@@ -44,6 +45,11 @@ async function ensureCanvas(): Promise<boolean> {
     if (typeof document !== 'undefined') return true;
     try {
       const mod = await import('@napi-rs/canvas');
+      // Register Office-font substitutes (Carlito, Caladea, Arimo, ...) so
+      // the CSS cascade in `buildFontString` resolves to known metrics. Without
+      // these, "Calibri" falls through to whatever Skia picks as default and
+      // pagination diverges from what the browser produces.
+      await registerOfficeSubstitutes(mod);
       const c = mod.createCanvas(2000, 2000);
       const ctx = c.getContext('2d');
       if (!ctx) return false;

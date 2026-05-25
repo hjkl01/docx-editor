@@ -189,17 +189,23 @@ export interface PagedMarkdownOptions extends MarkdownOptionsBase {
    * heuristic page splitter. Only honored by the async paged variant
    * ({@link toMarkdownPagedAsync}) because the layout engine needs a
    * Canvas2D context — in Node / Bun the implementation lazy-loads
-   * `@napi-rs/canvas` (optional peer dep).
+   * `@napi-rs/canvas` (optional peer dep) and auto-downloads Google's
+   * Croscore Office-font substitutes (Carlito for Calibri, Caladea for
+   * Cambria, Arimo for Arial/Aptos, ...) into a temp-dir cache so the
+   * CSS cascade in `buildFontString` resolves to known metrics.
    *
    * - `true`: always use the layout engine.
-   * - `'fallback'`: use the heuristic first; only run the layout engine if
-   *   the heuristic produced a single page on a substantial doc (i.e. the
-   *   doc has no pagination cache). Recommended for production.
+   * - `'fallback'`: use the heuristic first; only run the layout engine
+   *   if the heuristic produced a single page on a substantial doc (the
+   *   case where no pagination cache exists). Recommended for production.
    * - Falsy / unset (default): heuristic only.
    *
-   * Caveat: layout-engine pagination won't byte-match Word because Word's
-   * renderer differs from our layout + Skia. Expect ±1 page on
-   * cache-less docs. Use for "better than one page" not "matches Word".
+   * Caveat: layout-engine output won't always byte-match Word's pagination
+   * even with substitute fonts, because Skia (used by `@napi-rs/canvas`)
+   * computes glyph metrics slightly differently than Blink (used by
+   * browsers) and Word's renderer. Expect occasional ±1 page divergence
+   * on cache-less docs. The heuristic is more accurate when Word has
+   * touched the doc — keep `'fallback'` as the default.
    */
   useLayoutEngine?: boolean | 'fallback';
 }
