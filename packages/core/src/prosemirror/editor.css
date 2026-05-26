@@ -713,14 +713,23 @@
 }
 
 /*
- * Image-only cells: zero the parent paragraph's font strut so the image
- * height isn't padded by the parent font's line-box (#425). Scoped to
- * paragraphs that contain an image — the previous broader selector also
- * matched text-only `p:has(span)`, which collapsed text cells in the
- * inline editor while the painter kept them at full height (#468).
+ * Suppress the parent paragraph's font strut so each line's height comes
+ * from the run-span's own DOCX font metrics (#425). Without this, image
+ * cells are inflated by the default-font line-box and text cells inherit
+ * an oversized line-box from the parent paragraph instead of the run's
+ * own size — both forms make the inline editor grow taller than the
+ * painter and disagree with Word.
+ *
+ * The companion `position: relative; top: 0.4em` shim that used to live
+ * here was a vertical-centering hack from before cell vAlign was wired
+ * through correctly; with cells honoring `<w:vAlign w:val="center"/>` via
+ * `vertical-align: middle` it just pushed every run 0.4em below center
+ * and is no longer needed (#468).
  */
 .hf-editor-pm .ProseMirror td p:has(img),
-.hf-editor-pm .ProseMirror th p:has(img) {
+.hf-editor-pm .ProseMirror th p:has(img),
+.hf-editor-pm .ProseMirror td p:has(span),
+.hf-editor-pm .ProseMirror th p:has(span) {
   font-size: 0 !important;
   line-height: 0 !important;
 }
