@@ -301,26 +301,37 @@ export function extractTrackedChanges(state: EditorState | null): TrackedChanges
     // Otherwise drop the new entry — broader sibling already represents it.
   }
 
-  // Merge adjacent entries with the same revisionId and type into one.
-  // Restricted to INLINE types (insertion / deletion) — paragraph-mark entries
-  // use the whole-paragraph range, and two consecutive paragraphs sharing a
-  // revision triple (legal in OOXML for a multi-paragraph insertion applied
-  // under one id) must stay as distinct sidebar rows.
+  // Merge inline insertion/deletion entries that share a revision triple
+  // into a single sidebar card. The suggesting-mode plugin coalesces a
+  // continuous editing run under one revisionId — including runs split
+  // across paragraph boundaries (typing, Enter, typing) — so two entries
+  // with matching (type, revisionId, author, date) belong on one card
+  // even when separated by a pilcrow.
+  //
+  // Restricted to inline types: paragraph-mark entries (structural) were
+  // already coalesced above by the (id, author, date) triple, and any
+  // remaining structural entries should stay distinct so the user sees
+  // each affected paragraph's anchor in the sidebar.
+  const inlineGroups = new Map<string, TrackedChangeEntry>();
   const merged: TrackedChangeEntry[] = [];
   for (const entry of ordered) {
-    const last = merged[merged.length - 1];
     const isInlineType = entry.type === 'insertion' || entry.type === 'deletion';
-    if (
-      isInlineType &&
-      last &&
-      last.revisionId === entry.revisionId &&
-      last.type === entry.type &&
-      last.to === entry.from
-    ) {
-      last.text += entry.text;
-      last.to = entry.to;
-    } else {
+    if (!isInlineType) {
       merged.push({ ...entry });
+      continue;
+    }
+    const key = `${entry.type}|${entry.revisionId}|${entry.author}|${entry.date ?? ''}`;
+    const group = inlineGroups.get(key);
+    if (group) {
+      // Cross-paragraph runs get a space separator; literally adjacent runs
+      // concatenate directly.
+      const sep = group.to === entry.from ? '' : ' ';
+      group.text += sep + entry.text;
+      group.to = entry.to;
+    } else {
+      const copy = { ...entry };
+      inlineGroups.set(key, copy);
+      merged.push(copy);
     }
   }
 
@@ -355,5 +366,23 @@ export function extractTrackedChanges(state: EditorState | null): TrackedChanges
       final.push(curr);
     }
   }
-  return { entries: final, commentToRevision };
+
+  // Final pass: if a paragraph-mark entry (pPrIns / pPrDel) shares its
+  // revision triple with an inline entry (insertion / deletion / replacement),
+  // the inline entry already represents the whole conceptual edit — hide
+  // the structural sibling so the sidebar shows ONE card per change. The
+  // shared `revisionId` means one Accept still clears both sites.
+  const inlineKeys = new Set<string>();
+  for (const e of final) {
+    if (e.type === 'insertion' || e.type === 'deletion' || e.type === 'replacement') {
+      inlineKeys.add(`${e.revisionId}|${e.author}|${e.date ?? ''}`);
+    }
+  }
+  const deduped = final.filter((e) => {
+    if (e.type !== 'paragraphMarkInsertion' && e.type !== 'paragraphMarkDeletion') {
+      return true;
+    }
+    return !inlineKeys.has(`${e.revisionId}|${e.author}|${e.date ?? ''}`);
+  });
+  return { entries: deduped, commentToRevision };
 }

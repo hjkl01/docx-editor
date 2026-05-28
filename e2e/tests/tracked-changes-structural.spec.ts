@@ -400,6 +400,58 @@ test.describe('Tracked paragraph-mark revisions (issue #614)', () => {
     ).toBe(0);
   });
 
+  test('Replace selection plus added paragraphs share one revisionId', async ({ page }) => {
+    // The user's "best practice" scenario: type baseline text, then in
+    // suggesting mode select-all + retype + Enter + type + Enter + type.
+    // All deletion + insertion + paragraph-mark sites should share ONE
+    // revisionId so the sidebar shows ONE card and ONE Accept clears the
+    // whole continuous edit (matches Word's grouping by author + session).
+    await editor.typeText('original text here');
+    expect(await setSuggestionMode(page, true, 'Jane')).toBe(true);
+    await page.keyboard.press('Meta+a');
+    await editor.typeText('replacement');
+    await editor.pressEnter();
+    await editor.typeText('paragraph two');
+    await editor.pressEnter();
+    await editor.typeText('paragraph three');
+    await page.waitForTimeout(100);
+
+    const distinctIds = await page.$$eval('[data-revision-id]', (els) => {
+      const ids = els
+        .filter((el) => (el as HTMLElement).dataset.revisionAuthor === 'Jane')
+        .map((el) => (el as HTMLElement).dataset.revisionId);
+      return [...new Set(ids)];
+    });
+    expect(
+      distinctIds.length,
+      'one continuous editing run by one author should produce one revisionId'
+    ).toBe(1);
+  });
+
+  test('Tracked typing + Enter inside a table cell coalesces into one revision', async ({
+    page,
+  }) => {
+    // Tables nest paragraphs inside cells. The cross-block coalesce lookup
+    // walks descendants of the adjacent block, so typing + Enter inside a
+    // single cell must collapse to one revisionId the same way it does at
+    // the document root.
+    await page.evaluate(() => window.__DOCX_EDITOR_E2E__?.plantSimpleTable?.());
+    await page.evaluate(() => window.__DOCX_EDITOR_E2E__?.focusFirstTableCell?.());
+    expect(await setSuggestionMode(page, true, 'Jane')).toBe(true);
+    await editor.typeText('cell typed');
+    await editor.pressEnter();
+    await editor.typeText('more in cell');
+    await page.waitForTimeout(100);
+
+    const distinctIds = await page.$$eval('[data-revision-id]', (els) => {
+      const ids = els
+        .filter((el) => (el as HTMLElement).dataset.revisionAuthor === 'Jane')
+        .map((el) => (el as HTMLElement).dataset.revisionId);
+      return [...new Set(ids)];
+    });
+    expect(distinctIds.length).toBe(1);
+  });
+
   test('Consecutive Enters by the same author coalesce into one revision', async ({ page }) => {
     // Word groups a run of tracked paragraph-mark insertions by the same
     // author into one change. The sidebar should show ONE card for three

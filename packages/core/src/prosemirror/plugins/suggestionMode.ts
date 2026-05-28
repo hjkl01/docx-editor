@@ -55,27 +55,26 @@ function makeRevisionInfo(pluginState: SuggestionModeState): MarkAttrs {
   return makeMarkAttrs(pluginState);
 }
 
-/** Walk into `block` to its last text node (rightmost in doc order). */
-function lastTextOf(block: PMNode): PMNode | null {
-  let last: PMNode | null = null;
+/**
+ * Find the first text node inside `block` that carries a mark of the given
+ * type by the given author. Walks all text nodes — needed when a paragraph
+ * contains BOTH a deletion and an insertion (replace operation) and the
+ * caller wants whichever matches the target mark type. Returning just the
+ * first or last text would silently miss the matching one in that case.
+ */
+function findMarkedTextIn(block: PMNode, markTypeName: string, author: string): MarkAttrs | null {
+  let hit: MarkAttrs | null = null;
   block.descendants((node) => {
-    if (node.isText) last = node;
-  });
-  return last;
-}
-
-/** Walk into `block` to its first text node (leftmost in doc order). */
-function firstTextOf(block: PMNode): PMNode | null {
-  let first: PMNode | null = null;
-  block.descendants((node) => {
-    if (first) return false;
-    if (node.isText) {
-      first = node;
+    if (hit) return false;
+    if (!node.isText) return true;
+    const mark = node.marks.find((m) => m.type.name === markTypeName && m.attrs.author === author);
+    if (mark) {
+      hit = mark.attrs as MarkAttrs;
       return false;
     }
     return true;
   });
-  return first;
+  return hit;
 }
 
 /**
@@ -107,13 +106,17 @@ function findAdjacentRevision(
       const hit = matches(node);
       if (hit) return hit;
     }
-    // Cross-block: at a block boundary, peek into the neighboring block.
+    // Cross-block: at a block boundary, scan the neighboring block for ANY
+    // text node carrying the matching mark+author. Using first/lastTextOf
+    // alone would miss the case where the boundary text node is the wrong
+    // mark type (e.g. previous block ends with a tracked deletion but
+    // also contains an insertion earlier on — a replace operation).
     if ($pos.parentOffset === 0 && $pos.depth > 0) {
       const blockStart = $pos.before($pos.depth);
       if (blockStart > 0) {
         const prevBlock = doc.resolve(blockStart).nodeBefore;
         if (prevBlock) {
-          const hit = matches(lastTextOf(prevBlock));
+          const hit = findMarkedTextIn(prevBlock, markTypeName, author);
           if (hit) return hit;
         }
       }
@@ -122,7 +125,7 @@ function findAdjacentRevision(
       const blockEnd = $pos.after($pos.depth);
       const nextBlock = doc.resolve(blockEnd).nodeAfter;
       if (nextBlock) {
-        const hit = matches(firstTextOf(nextBlock));
+        const hit = findMarkedTextIn(nextBlock, markTypeName, author);
         if (hit) return hit;
       }
     }
@@ -178,24 +181,20 @@ function findAdjacentParagraphMark(
       const existing = node.attrs[attr] as MarkAttrs | null;
       if (existing && existing.author === author) return existing;
     }
-    // Inline mark at the END of the previous paragraph (typed text right
-    // before this Enter) or the START of the next paragraph (typed text
-    // right after).
+    // Inline mark by the same author anywhere in the previous or current
+    // paragraph. Walk all text nodes (not just first/last) so a paragraph
+    // that contains BOTH a deletion and an insertion (replace operation)
+    // still surfaces the matching mark — lastTextOf might land on a
+    // deletion when we need the insertion, and vice versa.
     const prev = $pos.nodeBefore;
     if (prev?.type.name === 'paragraph') {
-      const lastText = lastTextOf(prev);
-      const mark = lastText?.marks.find(
-        (m) => m.type.name === inlineMarkName && m.attrs.author === author
-      );
-      if (mark) return mark.attrs as MarkAttrs;
+      const hit = findMarkedTextIn(prev, inlineMarkName, author);
+      if (hit) return hit;
     }
     const next = $pos.nodeAfter;
     if (next?.type.name === 'paragraph') {
-      const firstText = firstTextOf(next);
-      const mark = firstText?.marks.find(
-        (m) => m.type.name === inlineMarkName && m.attrs.author === author
-      );
-      if (mark) return mark.attrs as MarkAttrs;
+      const hit = findMarkedTextIn(next, inlineMarkName, author);
+      if (hit) return hit;
     }
   } catch {
     /* paragraph at start/end of doc */
@@ -214,7 +213,12 @@ function markRangeAsDeleted(
   to: number,
   insertionType: MarkType,
   deletionType: MarkType,
-  pluginState: SuggestionModeState
+  pluginState: SuggestionModeState,
+  /** When the caller is a replace op, pass the insertion attrs already
+   * minted so the deletion shares the same revision triple. Word treats
+   * a replace as one conceptual change; sharing the id collapses both
+   * sides into a single sidebar card and one Accept clears both. */
+  shareAttrs?: MarkAttrs
 ): void {
   const ranges: { from: number; to: number; isOwnInsert: boolean }[] = [];
 
@@ -232,7 +236,8 @@ function markRangeAsDeleted(
   if (ranges.length === 0) return;
 
   const delAttrs =
-    findAdjacentRevisionForRange(doc, from, to, 'deletion', pluginState.author) ||
+    shareAttrs ??
+    findAdjacentRevisionForRange(doc, from, to, 'deletion', pluginState.author) ??
     makeMarkAttrs(pluginState);
 
   for (let i = ranges.length - 1; i >= 0; i--) {
@@ -268,7 +273,18 @@ function applySuggestionInsert(
   if (from !== to) {
     const deletionType = view.state.schema.marks.deletion;
     if (deletionType) {
-      markRangeAsDeleted(tr, view.state.doc, from, to, insertionType, deletionType, pluginState);
+      // Replace op: share the insertion's revision triple with the
+      // deletion so both halves group as one tracked change.
+      markRangeAsDeleted(
+        tr,
+        view.state.doc,
+        from,
+        to,
+        insertionType,
+        deletionType,
+        pluginState,
+        insertAttrs
+      );
     }
   }
 
