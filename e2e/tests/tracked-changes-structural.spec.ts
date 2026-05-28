@@ -428,6 +428,37 @@ test.describe('Tracked paragraph-mark revisions (issue #614)', () => {
     ).toBe(1);
   });
 
+  test('One Accept click clears a replace + multi-paragraph coalesced run', async ({ page }) => {
+    // Regression: the replacement card was dispatching range-based accept,
+    // which only cleared marks within (from, to). pPrIns attrs at adjacent
+    // paragraphs sharing the same revisionId stayed behind so the user
+    // saw a leftover "Inserted paragraph break" card and had to Accept
+    // a second time. By-id dispatch clears every site in one pass.
+    await editor.typeText('baseline text');
+    expect(await setSuggestionMode(page, true, 'Jane')).toBe(true);
+    await page.keyboard.press('Meta+a');
+    await editor.typeText('replaced');
+    await editor.pressEnter();
+    await editor.typeText('second');
+    await editor.pressEnter();
+    await editor.typeText('third');
+    await page.waitForTimeout(100);
+
+    const toggle = page.locator('[aria-label="Toggle comments sidebar"]');
+    if ((await toggle.getAttribute('aria-pressed')) !== 'true') {
+      await toggle.click();
+      await page.waitForTimeout(150);
+    }
+
+    await expect(page.locator('.docx-tracked-change-card')).toHaveCount(1);
+
+    await page.locator('.docx-tracked-change-card button[title="Accept"]').first().click();
+    await page.waitForTimeout(200);
+
+    await expect(page.locator('.docx-tracked-change-card')).toHaveCount(0);
+    expect(await page.locator('[data-revision-id]').count()).toBe(0);
+  });
+
   test('Tracked typing + Enter inside a table cell coalesces into one revision', async ({
     page,
   }) => {

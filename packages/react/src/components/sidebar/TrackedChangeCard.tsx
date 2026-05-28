@@ -33,30 +33,21 @@ export function TrackedChangeCard({
 }: TrackedChangeCardProps) {
   const { t } = useTranslation();
   const authorName = change.author || t('trackedChanges.unknown');
-  // All structural revisions (paragraph-mark + table row/cell/table) accept
-  // by `revisionId`, not by `(from, to)` — they all need the by-id dispatch.
-  const isStructural =
-    change.type === 'paragraphMarkInsertion' ||
-    change.type === 'paragraphMarkDeletion' ||
-    change.type === 'paragraphPropertiesChanged' ||
-    change.type === 'rowInserted' ||
-    change.type === 'rowDeleted' ||
-    change.type === 'rowPropertiesChanged' ||
-    change.type === 'cellInserted' ||
-    change.type === 'cellDeleted' ||
-    change.type === 'cellMerged' ||
-    change.type === 'cellPropertiesChanged' ||
-    change.type === 'tablePropertiesChanged';
-  const isParagraphMark = isStructural;
 
+  // Dispatch by `revisionId` whenever the host wired the by-id handlers.
+  // A single coalesced edit can scatter sites across paragraphs (inline
+  // marks + pPrIns attrs sharing one id); a range-based accept only clears
+  // marks within the entry's (from, to), leaving sibling pPrIns attrs
+  // behind so the user would need a second Accept. By-id walks every site
+  // sharing the id in one pass — correct for all entry types.
   const handleAccept = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (isParagraphMark) onAcceptById?.(change.revisionId);
+    if (onAcceptById) onAcceptById(change.revisionId);
     else onAccept?.(change.from, change.to);
   };
   const handleReject = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (isParagraphMark) onRejectById?.(change.revisionId);
+    if (onRejectById) onRejectById(change.revisionId);
     else onReject?.(change.from, change.to);
   };
 

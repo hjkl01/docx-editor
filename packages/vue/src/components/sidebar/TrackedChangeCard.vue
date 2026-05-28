@@ -111,31 +111,18 @@ const emit = defineEmits<{
 
 const authorName = computed(() => props.change.author || t('trackedChanges.unknown'));
 
-const isParagraphMark = computed(() => {
-  const t = props.change.type;
-  return (
-    t === 'paragraphMarkInsertion' ||
-    t === 'paragraphMarkDeletion' ||
-    t === 'paragraphPropertiesChanged' ||
-    t === 'rowInserted' ||
-    t === 'rowDeleted' ||
-    t === 'rowPropertiesChanged' ||
-    t === 'cellInserted' ||
-    t === 'cellDeleted' ||
-    t === 'cellMerged' ||
-    t === 'cellPropertiesChanged' ||
-    t === 'tablePropertiesChanged'
-  );
-});
-
+// Dispatch by `revisionId` whenever the host wired the by-id channel.
+// A single coalesced edit can scatter sites across paragraphs (inline
+// marks + pPrIns attrs sharing one id); a range-based accept only clears
+// marks within the entry's (from, to), leaving sibling pPrIns attrs
+// behind so the user would need a second Accept. By-id walks every site
+// sharing the id in one pass — correct for all entry types.
 function onAccept() {
-  if (isParagraphMark.value) emit('accept-by-id', props.change.revisionId);
-  else emit('accept', props.change.from, props.change.to);
+  emit('accept-by-id', props.change.revisionId);
 }
 
 function onReject() {
-  if (isParagraphMark.value) emit('reject-by-id', props.change.revisionId);
-  else emit('reject', props.change.from, props.change.to);
+  emit('reject-by-id', props.change.revisionId);
 }
 </script>
 
