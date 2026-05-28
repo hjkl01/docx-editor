@@ -467,6 +467,39 @@ test.describe('Tracked paragraph-mark revisions (issue #614)', () => {
     expect(await page.locator('[data-revision-id]').count()).toBe(0);
   });
 
+  test('Inserting a table in suggesting mode shows one "Inserted table" card', async ({ page }) => {
+    // OOXML model: every row gets <w:trPr><w:ins/></w:trPr> and every cell
+    // gets <w:cellIns/> with the SAME w:id. Sidebar synthesizes one
+    // 'tableInserted' entry from the per-row entries because they share an
+    // id (matches Word's mental model: insert table = one card, edit
+    // content = separate cards).
+    expect(await setSuggestionMode(page, true, 'Jane')).toBe(true);
+    expect(
+      await page.evaluate(() => window.__DOCX_EDITOR_E2E__?.insertTable?.(3, 2) ?? false)
+    ).toBe(true);
+    await page.waitForTimeout(150);
+
+    const toggle = page.locator('[aria-label="Toggle comments sidebar"]');
+    if ((await toggle.getAttribute('aria-pressed')) !== 'true') {
+      await toggle.click();
+      await page.waitForTimeout(150);
+    }
+
+    // ONE card, labeled "Inserted table" (not "Inserted row").
+    const cards = page.locator('.docx-tracked-change-card');
+    await expect(cards).toHaveCount(1);
+    await expect(cards.first()).toContainText('Inserted table');
+
+    // Expand the card (Accept/Reject only render when expanded), then accept.
+    await cards.first().click();
+    await page.waitForTimeout(150);
+    await page.locator('.docx-tracked-change-card button[title="Accept"]').first().click();
+    await page.waitForTimeout(200);
+    await expect(cards).toHaveCount(0);
+    expect(await page.locator('.layout-table-row.ep-revision-row').count()).toBe(0);
+    expect(await page.locator('.layout-table-row').count()).toBe(3);
+  });
+
   test('Tracked typing + Enter inside a table cell coalesces into one revision', async ({
     page,
   }) => {
