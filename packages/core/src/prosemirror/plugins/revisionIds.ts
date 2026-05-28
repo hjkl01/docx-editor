@@ -22,9 +22,32 @@
  * @packageDocumentation
  */
 
+import type { EditorState } from 'prosemirror-state';
+import type { RevisionInfo } from '../../types/content/trackedChange';
+import { suggestionModeKey } from './suggestionMode';
+
 let counter = Date.now();
 
 /** Mint the next tracked-revision id (`w:id`). Strictly monotonic per realm. */
 export function mintRevisionId(): number {
   return counter++;
+}
+
+/**
+ * Build a fresh `RevisionInfo` triple from the active suggesting-mode
+ * state. Returns `null` when suggesting mode is OFF — callers use this to
+ * decide whether to track an edit or apply it directly.
+ *
+ * Shared by `suggestionMode.ts`'s text/paragraph handlers and by the
+ * suggesting-aware table commands (`addRowBelow`, `deleteRow`, ...). One
+ * source of truth for both the mint and the author/date fields.
+ */
+export function makeRevisionInfo(state: EditorState): RevisionInfo | null {
+  const pluginState = suggestionModeKey.getState(state);
+  if (!pluginState?.active) return null;
+  return {
+    revisionId: mintRevisionId(),
+    author: pluginState.author,
+    date: new Date().toISOString(),
+  };
 }

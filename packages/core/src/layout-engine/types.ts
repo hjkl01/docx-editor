@@ -331,9 +331,9 @@ export type ParagraphAttrs = {
    * change bar; the cache key includes presence so two paragraphs with
    * different revisions don't share a measurement.
    */
-  pPrIns?: { revisionId: number; author: string; date: string | null } | null;
+  pPrIns?: import('../types/content/trackedChange').RevisionInfo | null;
   /** Tracked-change marker on the paragraph mark (`<w:pPr><w:rPr><w:del/>`). */
-  pPrDel?: { revisionId: number; author: string; date: string | null } | null;
+  pPrDel?: import('../types/content/trackedChange').RevisionInfo | null;
 };
 
 /**

@@ -120,20 +120,120 @@ export function rejectChange(from: number, to: number): Command {
 }
 
 /**
- * Accept all tracked changes in the document.
+ * Walk the document and collect every distinct `revisionId` carried by
+ * any tracked-change site: inline insertion/deletion marks, paragraph-
+ * mark `pPrIns`/`pPrDel`, paragraph `pPrChange` entries, table row
+ * `trIns`/`trDel`, row `trPrChange`, cell `cellMarker`/`tcPrChange`,
+ * table `tblPrChange`. The ids are returned in document order; bare-id
+ * (without author/date) is sufficient for the resolver since it walks
+ * every matching site for each id.
+ */
+function collectAllRevisionIds(state: EditorState): number[] {
+  const seen = new Set<number>();
+  const ids: number[] = [];
+  const add = (id: unknown): void => {
+    if (typeof id === 'number' && !seen.has(id)) {
+      seen.add(id);
+      ids.push(id);
+    }
+  };
+  const insertionType = state.schema.marks.insertion;
+  const deletionType = state.schema.marks.deletion;
+  state.doc.descendants((node) => {
+    // Paragraph-mark and paragraph-property revisions.
+    if (node.type.name === 'paragraph') {
+      add((node.attrs.pPrIns as { revisionId: number } | null)?.revisionId);
+      add((node.attrs.pPrDel as { revisionId: number } | null)?.revisionId);
+      const pPrChange = node.attrs.pPrChange as Array<{ info: { id: number } }> | null;
+      if (Array.isArray(pPrChange)) for (const e of pPrChange) add(e.info.id);
+    }
+    // Table row revisions.
+    if (node.type.name === 'tableRow') {
+      add((node.attrs.trIns as { revisionId: number } | null)?.revisionId);
+      add((node.attrs.trDel as { revisionId: number } | null)?.revisionId);
+      const trPrChange = node.attrs.trPrChange as Array<{ info: { id: number } }> | null;
+      if (Array.isArray(trPrChange)) for (const e of trPrChange) add(e.info.id);
+    }
+    // Table cell revisions.
+    if (node.type.name === 'tableCell' || node.type.name === 'tableHeader') {
+      const m = node.attrs.cellMarker as { info: { revisionId: number } } | null;
+      add(m?.info?.revisionId);
+      const tcPrChange = node.attrs.tcPrChange as Array<{ info: { id: number } }> | null;
+      if (Array.isArray(tcPrChange)) for (const e of tcPrChange) add(e.info.id);
+    }
+    // Table-level revisions.
+    if (node.type.name === 'table') {
+      const tblPrChange = node.attrs.tblPrChange as Array<{ info: { id: number } }> | null;
+      if (Array.isArray(tblPrChange)) for (const e of tblPrChange) add(e.info.id);
+    }
+    // Inline insertion/deletion marks.
+    if (node.isText) {
+      for (const mark of node.marks) {
+        if (
+          (insertionType && mark.type === insertionType) ||
+          (deletionType && mark.type === deletionType)
+        ) {
+          add(mark.attrs.revisionId);
+        }
+      }
+    }
+  });
+  return ids;
+}
+
+/**
+ * Accept all tracked changes in the document — inline marks AND structural
+ * revisions (paragraph-mark, row, cell, property changes). Returns the
+ * count of distinct revision ids resolved.
  */
 export function acceptAllChanges(): Command {
   return (state, dispatch) => {
-    return acceptChange(0, state.doc.content.size)(state, dispatch);
+    const ids = collectAllRevisionIds(state);
+    if (ids.length === 0) return false;
+    if (!dispatch) return true;
+    // Dispatch each `resolveById` sequentially against the LATEST view
+    // state. Each call dispatches its own transaction (one undo step per
+    // revision), so we re-read the current state between calls. This
+    // matches Word's UX where "Accept all" undoes one-by-one but is more
+    // ergonomic for the user than a single mega-transaction that's hard
+    // to inspect.
+    //
+    // resolveById may join/remove rows or tables, so we re-collect ids
+    // would be over-eager — instead we keep our snapshot list and let
+    // any already-resolved id no-op (returns false).
+    const view = dispatch as unknown as { state?: EditorState };
+    let lastState: EditorState = view.state ?? state;
+    let acceptedCount = 0;
+    const capturingDispatch = (tr: import('prosemirror-state').Transaction) => {
+      dispatch(tr);
+      lastState = lastState.apply(tr);
+    };
+    for (const id of ids) {
+      if (resolveById(id, 'accept')(lastState, capturingDispatch)) acceptedCount += 1;
+    }
+    void acceptedCount;
+    return true;
   };
 }
 
 /**
- * Reject all tracked changes in the document.
+ * Reject all tracked changes in the document — inverse of `acceptAllChanges`.
  */
 export function rejectAllChanges(): Command {
   return (state, dispatch) => {
-    return rejectChange(0, state.doc.content.size)(state, dispatch);
+    const ids = collectAllRevisionIds(state);
+    if (ids.length === 0) return false;
+    if (!dispatch) return true;
+    const view = dispatch as unknown as { state?: EditorState };
+    let lastState: EditorState = view.state ?? state;
+    const capturingDispatch = (tr: import('prosemirror-state').Transaction) => {
+      dispatch(tr);
+      lastState = lastState.apply(tr);
+    };
+    for (const id of ids) {
+      resolveById(id, 'reject')(lastState, capturingDispatch);
+    }
+    return true;
   };
 }
 
@@ -373,11 +473,24 @@ function applyPriorParagraphFormattingToAttrs(
   prior: import('../../types/document').ParagraphFormatting
 ): Record<string, unknown> {
   const next: Record<string, unknown> = { ...attrs };
-  // Field list mirrors `ParagraphFormatting` (`types/formatting.ts`). When
-  // adding a new ParagraphFormatting field, add it here too so reject can
-  // restore it. `runProperties` is intentionally excluded: it maps to
-  // `defaultTextFormatting` on the PM attr via a separate resolver path
-  // and would otherwise overwrite resolved style data with raw rPr.
+  // Only fields whose PM-attr shape matches the model `ParagraphFormatting`
+  // shape are safe to copy verbatim. Specifically EXCLUDED:
+  //
+  //   - `borders` — model is `{ top?: BorderSpec, ... }`, PM attr same
+  //     shape — IS safe and IS included below.
+  //   - `shading` — same shape — IS safe.
+  //   - `tabs` — model `TabStop[]`, PM same — IS safe.
+  //   - `numPr` — model `{ numId?, ilvl? }`, PM same — IS safe.
+  //   - `frame` — model `FrameProperties`; PM has no equivalent attr —
+  //     SKIPPED.
+  //   - `runProperties` — model rPr; PM uses resolved `defaultTextFormatting`
+  //     via a style cascade — SKIPPED (would overwrite resolved data).
+  //   - `widowControl`, `suppressLineNumbers`, `suppressAutoHyphens` — model
+  //     has them but PM does not surface as attrs — SKIPPED until plumbed.
+  //
+  // Fields below are confirmed congruent in both shapes. Adding a new
+  // ParagraphFormatting field requires verifying its PM attr shape (see
+  // `packages/core/src/prosemirror/schema/nodes.ts`'s ParagraphAttrs).
   const fields: Array<keyof import('../../types/document').ParagraphFormatting> = [
     'alignment',
     'spaceBefore',
@@ -402,10 +515,6 @@ function applyPriorParagraphFormattingToAttrs(
     'bidi',
     'outlineLevel',
     'numPr',
-    'widowControl',
-    'frame',
-    'suppressLineNumbers',
-    'suppressAutoHyphens',
   ];
   for (const f of fields) {
     if (Object.prototype.hasOwnProperty.call(prior, f)) {
@@ -564,13 +673,17 @@ function resolveById(revisionId: number, mode: 'accept' | 'reject'): Command {
       }
     }
 
-    // Phase 2 (round-trip slice): table-cell + table-row markers are CLEARED
-    // on both accept and reject. The full Word semantic — accept(trDel) =
-    // delete row, reject(trIns) = delete row, etc. — needs surgical PM
-    // mutations that prosemirror-tables doesn't handle cleanly at this
-    // layer; lands with the suggesting-aware table commands (Phase 2b).
-    // Until then, clear-only is non-destructive and matches user intent for
-    // "I'm done with this revision marker."
+    // Table-cell markers (cellIns / cellDel / cellMerge).
+    //   accept ins  → clear marker (cell stays in its new form)
+    //   reject ins  → clear marker (Phase 2c: should delete the cell;
+    //                 mid-grid cell removal requires prosemirror-tables
+    //                 grid surgery and is deferred)
+    //   accept del  → clear marker (Phase 2c: should delete the cell)
+    //   reject del  → clear marker (cell stays)
+    //   accept/reject merge → clear marker
+    // Clear-only is non-destructive in every mode and gets the cell into a
+    // "marker resolved" state. The structural mutation lives in the
+    // suggesting-aware path on the next slice.
     const sortedCells = [...tableCellSites].sort((a, b) => b.pos - a.pos);
     for (const site of sortedCells) {
       const mappedPos = tr.mapping.map(site.pos);
@@ -581,16 +694,18 @@ function resolveById(revisionId: number, mode: 'accept' | 'reject'): Command {
         info: { revisionId: number };
       } | null;
       if (!m || m.info.revisionId !== revisionId) continue;
-      // Removing/deleting a cell at this level is unsafe (prosemirror-tables
-      // would corrupt the grid). For round-trip cleanup we just clear the
-      // marker; suggesting-mode commands that author the marker will
-      // accept-with-structural-mutation in a future phase.
       tr.setNodeMarkup(mappedPos, undefined, { ...live.attrs, cellMarker: null });
     }
 
-    // Phase 2: table-row markers (trIns / trDel). Same caveat — we clear the
-    // marker on both accept and reject for now; full row removal needs the
-    // upcoming suggesting-aware command path.
+    // Table-row markers (trIns / trDel). Per Word's accept/reject semantics:
+    //   accept trIns  → clear marker (the row stays as a real row)
+    //   reject trIns  → delete the row (rolls back the insertion)
+    //   accept trDel  → delete the row (confirms the deletion)
+    //   reject trDel  → clear marker (the row stays)
+    // Reverse-position order so an earlier row's removal doesn't shift the
+    // mapped position of later sites in the same transaction. If the row
+    // is the only row in its table, the entire table is removed (PM-tables
+    // requires at least one row per table).
     const sortedRows = [...tableRowSites].sort((a, b) => b.pos - a.pos);
     for (const site of sortedRows) {
       const mappedPos = tr.mapping.map(site.pos);
@@ -598,10 +713,38 @@ function resolveById(revisionId: number, mode: 'accept' | 'reject'): Command {
       if (!live || live.type.name !== 'tableRow') continue;
       const trIns = live.attrs.trIns as { revisionId: number } | null;
       const trDel = live.attrs.trDel as { revisionId: number } | null;
-      const newAttrs = { ...live.attrs };
-      if (trIns?.revisionId === revisionId) newAttrs.trIns = null;
-      if (trDel?.revisionId === revisionId) newAttrs.trDel = null;
-      tr.setNodeMarkup(mappedPos, undefined, newAttrs);
+      const hasIns = trIns?.revisionId === revisionId;
+      const hasDel = trDel?.revisionId === revisionId;
+      if (!hasIns && !hasDel) continue;
+
+      const removeRow = (mode === 'reject' && hasIns) || (mode === 'accept' && hasDel);
+
+      if (removeRow) {
+        // Walk back from the row's position to find its parent table.
+        // `tr.doc.resolve(mappedPos).node()` returns the parent at that
+        // depth; for a tableRow that's the table.
+        const $row = tr.doc.resolve(mappedPos + 1);
+        const parentTable = $row.node($row.depth - 1);
+        const parentTableStart = $row.before($row.depth - 1);
+        if (parentTable?.type.name === 'table' && parentTable.childCount > 1) {
+          tr.delete(mappedPos, mappedPos + live.nodeSize);
+        } else if (parentTable?.type.name === 'table') {
+          // Single-row table — remove the whole table.
+          tr.delete(parentTableStart, parentTableStart + parentTable.nodeSize);
+        } else {
+          // Defensive: parent isn't a table (shouldn't happen). Fall back
+          // to clearing the marker.
+          const newAttrs = { ...live.attrs };
+          if (hasIns) newAttrs.trIns = null;
+          if (hasDel) newAttrs.trDel = null;
+          tr.setNodeMarkup(mappedPos, undefined, newAttrs);
+        }
+      } else {
+        const newAttrs = { ...live.attrs };
+        if (hasIns) newAttrs.trIns = null;
+        if (hasDel) newAttrs.trDel = null;
+        tr.setNodeMarkup(mappedPos, undefined, newAttrs);
+      }
     }
     // Suppress unused-arg warning for `mode` in the cell/row branches (the
     // semantic differences land with suggesting-mode commands).

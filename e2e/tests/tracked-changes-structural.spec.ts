@@ -310,50 +310,19 @@ test.describe('Tracked paragraph-mark revisions (issue #614)', () => {
     expect(await page.evaluate(() => window.__DOCX_EDITOR_E2E__?.addRowBelow?.())).toBe(true);
     await page.waitForTimeout(50);
 
-    // Now 2 rows. The new row (index 0 — well, actually below the first
-    // means it's row index 1) should carry `trIns`.
+    // Two rows now; only the new one carries `trIns`.
     expect(await page.evaluate(() => window.__DOCX_EDITOR_E2E__?.countTableRows?.() ?? 0)).toBe(2);
 
-    // Read all row attrs. The NEW row is the one carrying trIns.
-    const newRowInfo = await page.evaluate(() => {
-      const view = (
-        document.querySelector('[data-testid="docx-editor"]') as HTMLElement | null
-      )?.querySelector('.ProseMirror');
-      // Walk via the public API
-      const found: { revisionId: number; author: string } | null = null;
-      const hook = window.__DOCX_EDITOR_E2E__;
-      // We have getFirstTableRowAttrs but not all-rows; grab the row index 1
-      // attrs through a manual descend.
-      if (!hook) return null;
-      // Manual walk in evaluate context
-      void view; // unused locally; we use the editor ref via the global hook
-      // Use a fallback that picks any row carrying trIns
-      const attrs1 = hook.getFirstTableRowAttrs?.();
-      // Adapt: getFirstTableRowAttrs returns first row, which may be the
-      // original. The new-row trIns lives on the second row. For the test,
-      // we use the existing accept-by-id by extracting from extracted
-      // tracked changes — but easier: simply assert via PM walk.
-      void attrs1;
-      const w = window as unknown as {
-        __DOCX_EDITOR_E2E__?: { getParagraphAttrs?: (i: number) => Record<string, unknown> | null };
-      };
-      void w;
-      // Re-implement via direct PM walk:
-      const rootEl = document.querySelector('.ProseMirror');
-      void rootEl;
-      return found;
-    });
-    void newRowInfo;
-
-    // Find the revision id by reading the DOM data-revision-id from the
-    // painted/PM-rendered row (toDOM emits it on tr).
+    // The painted row carries `data-revision-id` via tableRowSpec.toDOM
+    // (set when `trIns` is non-null). Grab the id from there.
     const trIns = page.locator('tr[data-revision-id]').first();
     await expect(trIns).toBeVisible();
     const revIdStr = await trIns.getAttribute('data-revision-id');
     const revId = parseInt(revIdStr ?? '', 10);
     expect(Number.isFinite(revId)).toBe(true);
+    expect(await trIns.getAttribute('data-revision-author')).toBe('Jane');
 
-    // Accept clears the marker, keeping the row in place.
+    // Accept clears the marker; the row stays.
     expect(await acceptById(page, revId)).toBe(true);
     await page.waitForTimeout(50);
     expect(await page.evaluate(() => window.__DOCX_EDITOR_E2E__?.countTableRows?.() ?? 0)).toBe(2);

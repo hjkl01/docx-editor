@@ -395,6 +395,14 @@ const paragraphNodeSpec: NodeSpec = {
       domAttrs['data-revision-id'] = String(rev.revisionId);
       domAttrs['data-revision-author'] = rev.author;
       if (rev.date) domAttrs['data-revision-date'] = rev.date;
+    } else if (Array.isArray(attrs.pPrChange) && attrs.pPrChange.length > 0) {
+      // Property-change-only paragraph (no structural pPrIns/pPrDel).
+      // Surface the first entry's id so sidebar click-to-jump can anchor.
+      const first = attrs.pPrChange[0];
+      domAttrs.class = (domAttrs.class ? domAttrs.class + ' ' : '') + 'ep-revision-prop-change';
+      domAttrs['data-revision-id'] = String(first.info.id);
+      domAttrs['data-revision-author'] = first.info.author;
+      if (first.info.date) domAttrs['data-revision-date'] = first.info.date;
     }
 
     return ['p', domAttrs, 0];

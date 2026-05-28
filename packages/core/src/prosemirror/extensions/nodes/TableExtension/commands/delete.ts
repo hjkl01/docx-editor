@@ -11,22 +11,7 @@
 import { type Command, type EditorState, type Transaction } from 'prosemirror-state';
 import { CellSelection } from 'prosemirror-tables';
 import { getTableContext } from '../context';
-import { suggestionModeKey } from '../../../../plugins/suggestionMode';
-import { mintRevisionId } from '../../../../plugins/revisionIds';
-
-function makeRevisionInfo(state: EditorState): {
-  revisionId: number;
-  author: string;
-  date: string | null;
-} | null {
-  const pluginState = suggestionModeKey.getState(state);
-  if (!pluginState?.active) return null;
-  return {
-    revisionId: mintRevisionId(),
-    author: pluginState.author,
-    date: new Date().toISOString(),
-  };
-}
+import { makeRevisionInfo } from '../../../../plugins/revisionIds';
 
 export const deleteRow: Command = (
   state: EditorState,

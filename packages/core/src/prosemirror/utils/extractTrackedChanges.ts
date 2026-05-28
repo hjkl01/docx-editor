@@ -263,6 +263,10 @@ export function extractTrackedChanges(state: EditorState | null): TrackedChanges
   //
   // Inline insertion/deletion entries are NOT coalesced here — the
   // adjacent-merge pass below handles them.
+  //
+  // Single-pass: track each triple's slot index in `ordered` so an
+  // in-place replacement is O(1) (vs `ordered.indexOf(existing)` which
+  // would be O(n) inside an O(n) loop).
   const STRUCTURAL_PRIORITY: Record<string, number> = {
     tablePropertiesChanged: 5,
     rowInserted: 4,
@@ -277,7 +281,7 @@ export function extractTrackedChanges(state: EditorState | null): TrackedChanges
     paragraphPropertiesChanged: 2,
   };
   const isStructuralType = (t: TrackedChangeEntry['type']) => t in STRUCTURAL_PRIORITY;
-  const groupedByTriple = new Map<string, TrackedChangeEntry>();
+  const slotByKey = new Map<string, number>();
   const ordered: TrackedChangeEntry[] = [];
   for (const entry of raw) {
     if (!isStructuralType(entry.type)) {
@@ -285,18 +289,14 @@ export function extractTrackedChanges(state: EditorState | null): TrackedChanges
       continue;
     }
     const key = `${entry.revisionId}|${entry.author}|${entry.date ?? ''}`;
-    const existing = groupedByTriple.get(key);
-    if (!existing) {
-      groupedByTriple.set(key, entry);
-      ordered.push(entry);
+    const slot = slotByKey.get(key);
+    if (slot === undefined) {
+      slotByKey.set(key, ordered.push(entry) - 1);
       continue;
     }
     // Keep the entry with HIGHER structural priority (broader scope wins).
-    if ((STRUCTURAL_PRIORITY[entry.type] ?? 0) > (STRUCTURAL_PRIORITY[existing.type] ?? 0)) {
-      // Replace in-place inside the ordered array.
-      const idx = ordered.indexOf(existing);
-      if (idx >= 0) ordered[idx] = entry;
-      groupedByTriple.set(key, entry);
+    if ((STRUCTURAL_PRIORITY[entry.type] ?? 0) > (STRUCTURAL_PRIORITY[ordered[slot]!.type] ?? 0)) {
+      ordered[slot] = entry;
     }
     // Otherwise drop the new entry — broader sibling already represents it.
   }

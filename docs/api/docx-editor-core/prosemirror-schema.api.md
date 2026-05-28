@@ -179,16 +179,8 @@ export interface ParagraphAttrs {
     // (undocumented)
     paraId?: string;
     pPrChange?: ParagraphPropertyChange[] | null;
-    pPrDel?: {
-        revisionId: number;
-        author: string;
-        date: string | null;
-    } | null;
-    pPrIns?: {
-        revisionId: number;
-        author: string;
-        date: string | null;
-    } | null;
+    pPrDel?: RevisionInfo | null;
+    pPrIns?: RevisionInfo | null;
     renderedPageBreakBefore?: boolean;
     // (undocumented)
     sectionBreakType?: 'nextPage' | 'continuous' | 'oddPage' | 'evenPage';
@@ -244,25 +236,13 @@ export interface TableCellAttrs {
     };
     cellMarker?: {
         kind: 'ins';
-        info: {
-            revisionId: number;
-            author: string;
-            date: string | null;
-        };
+        info: RevisionInfo;
     } | {
         kind: 'del';
-        info: {
-            revisionId: number;
-            author: string;
-            date: string | null;
-        };
+        info: RevisionInfo;
     } | {
         kind: 'merge';
-        info: {
-            revisionId: number;
-            author: string;
-            date: string | null;
-        };
+        info: RevisionInfo;
         vMerge: 'rest' | 'cont';
         vMergeOrig?: 'rest' | 'cont';
     } | null;
@@ -292,16 +272,8 @@ export interface TableRowAttrs {
     isHeader?: boolean;
     _originalFormatting?: TableRowFormatting;
     // (undocumented)
-    trDel?: {
-        revisionId: number;
-        author: string;
-        date: string | null;
-    } | null;
-    trIns?: {
-        revisionId: number;
-        author: string;
-        date: string | null;
-    } | null;
+    trDel?: RevisionInfo | null;
+    trIns?: RevisionInfo | null;
     trPrChange?: TableRowPropertyChange[] | null;
 }
 

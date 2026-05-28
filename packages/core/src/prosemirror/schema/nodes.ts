@@ -20,6 +20,7 @@ import type {
   TableCellFormatting,
   SectionProperties,
 } from '../../types/document';
+import type { RevisionInfo } from '../../types/content/trackedChange';
 import type { FloatingTableProperties, TableLook } from '../../types';
 import type { WrapType } from '../../docx/wrapTypes';
 
@@ -141,14 +142,14 @@ export interface ParagraphAttrs {
    * `date` is ISO 8601 UTC with `Z` suffix; `null` if the source DOCX
    * omitted `w:date`. Reject joins this paragraph with the following one.
    */
-  pPrIns?: { revisionId: number; author: string; date: string | null } | null;
+  pPrIns?: RevisionInfo | null;
 
   /**
    * Paragraph-mark deletion tracking (`<w:pPr><w:rPr><w:del/>`). Same
    * shape and provenance as `pPrIns`. Accept joins this paragraph with
    * the following one; reject clears the marker, keeping the split.
    */
-  pPrDel?: { revisionId: number; author: string; date: string | null } | null;
+  pPrDel?: RevisionInfo | null;
 
   /**
    * Paragraph property changes (`<w:pPrChange>`). Each entry carries
@@ -294,8 +295,8 @@ export interface TableRowAttrs {
    * Authored by inserting/deleting a row in suggesting mode. The row stays
    * present until accept (for delete) or reject (for insert).
    */
-  trIns?: { revisionId: number; author: string; date: string | null } | null;
-  trDel?: { revisionId: number; author: string; date: string | null } | null;
+  trIns?: RevisionInfo | null;
+  trDel?: RevisionInfo | null;
   /** Row-property change history (`<w:trPrChange>`). */
   trPrChange?: import('../../types/document').TableRowPropertyChange[] | null;
 }
@@ -344,11 +345,11 @@ export interface TableCellAttrs {
    * cells (Word's on-disk convention).
    */
   cellMarker?:
-    | { kind: 'ins'; info: { revisionId: number; author: string; date: string | null } }
-    | { kind: 'del'; info: { revisionId: number; author: string; date: string | null } }
+    | { kind: 'ins'; info: RevisionInfo }
+    | { kind: 'del'; info: RevisionInfo }
     | {
         kind: 'merge';
-        info: { revisionId: number; author: string; date: string | null };
+        info: RevisionInfo;
         vMerge: 'rest' | 'cont';
         vMergeOrig?: 'rest' | 'cont';
       }

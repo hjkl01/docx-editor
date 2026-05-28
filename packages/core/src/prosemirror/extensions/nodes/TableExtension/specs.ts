@@ -73,6 +73,16 @@ export const tableSpec: NodeSpec = {
     }
     domAttrs.style = styles.join('; ');
 
+    // Tracked table-property change — surface data-revision-id so the
+    // sidebar can anchor on the table block.
+    if (Array.isArray(attrs.tblPrChange) && attrs.tblPrChange.length > 0) {
+      const first = attrs.tblPrChange[0];
+      domAttrs.class += ' ep-revision-prop-change';
+      domAttrs['data-revision-id'] = String(first.info.id);
+      domAttrs['data-revision-author'] = first.info.author;
+      if (first.info.date) domAttrs['data-revision-date'] = first.info.date;
+    }
+
     return ['table', domAttrs, ['tbody', 0]];
   },
 };
@@ -108,6 +118,13 @@ export const tableRowSpec: NodeSpec = {
       domAttrs['data-revision-id'] = String(rev.revisionId);
       domAttrs['data-revision-author'] = rev.author;
       if (rev.date) domAttrs['data-revision-date'] = rev.date;
+    } else if (Array.isArray(attrs.trPrChange) && attrs.trPrChange.length > 0) {
+      // Row-property-only change — surface a click-to-jump anchor.
+      const first = attrs.trPrChange[0];
+      domAttrs.class = 'ep-revision-prop-change';
+      domAttrs['data-revision-id'] = String(first.info.id);
+      domAttrs['data-revision-author'] = first.info.author;
+      if (first.info.date) domAttrs['data-revision-date'] = first.info.date;
     }
 
     return ['tr', domAttrs, 0];
@@ -275,6 +292,13 @@ export const tableCellSpec: NodeSpec = {
       domAttrs['data-revision-author'] = m.info.author;
       if (m.info.date) domAttrs['data-revision-date'] = m.info.date;
       if (m.kind === 'merge') domAttrs['data-vmerge'] = m.vMerge;
+    } else if (Array.isArray(attrs.tcPrChange) && attrs.tcPrChange.length > 0) {
+      // Cell-property-only change. Surface a click-to-jump anchor.
+      const first = attrs.tcPrChange[0];
+      domAttrs.class = `${domAttrs.class} ep-revision-prop-change`;
+      domAttrs['data-revision-id'] = String(first.info.id);
+      domAttrs['data-revision-author'] = first.info.author;
+      if (first.info.date) domAttrs['data-revision-date'] = first.info.date;
     }
 
     if (attrs.colspan > 1) domAttrs.colspan = String(attrs.colspan);
@@ -356,6 +380,12 @@ export const tableHeaderSpec: NodeSpec = {
       domAttrs['data-revision-author'] = m.info.author;
       if (m.info.date) domAttrs['data-revision-date'] = m.info.date;
       if (m.kind === 'merge') domAttrs['data-vmerge'] = m.vMerge;
+    } else if (Array.isArray(attrs.tcPrChange) && attrs.tcPrChange.length > 0) {
+      const first = attrs.tcPrChange[0];
+      domAttrs.class = `${domAttrs.class} ep-revision-prop-change`;
+      domAttrs['data-revision-id'] = String(first.info.id);
+      domAttrs['data-revision-author'] = first.info.author;
+      if (first.info.date) domAttrs['data-revision-date'] = first.info.date;
     }
 
     const styles: string[] = ['font-weight: bold'];

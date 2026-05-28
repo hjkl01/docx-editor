@@ -374,16 +374,8 @@ export type ParagraphAttrs = {
     defaultFontSize?: number;
     defaultFontFamily?: string;
     suppressEmptyParagraphHeight?: boolean;
-    pPrIns?: {
-        revisionId: number;
-        author: string;
-        date: string | null;
-    } | null;
-    pPrDel?: {
-        revisionId: number;
-        author: string;
-        date: string | null;
-    } | null;
+    pPrIns?: RevisionInfo | null;
+    pPrDel?: RevisionInfo | null;
 };
 
 // @public

@@ -370,16 +370,8 @@ export interface ParagraphAttrs {
     // (undocumented)
     paraId?: string;
     pPrChange?: ParagraphPropertyChange[] | null;
-    pPrDel?: {
-        revisionId: number;
-        author: string;
-        date: string | null;
-    } | null;
-    pPrIns?: {
-        revisionId: number;
-        author: string;
-        date: string | null;
-    } | null;
+    pPrDel?: RevisionInfo | null;
+    pPrIns?: RevisionInfo | null;
     renderedPageBreakBefore?: boolean;
     // (undocumented)
     sectionBreakType?: 'nextPage' | 'continuous' | 'oddPage' | 'evenPage';

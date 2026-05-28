@@ -13,22 +13,7 @@ import type { Node as PMNode, Schema } from 'prosemirror-model';
 import { type Command, type EditorState, type Transaction, TextSelection } from 'prosemirror-state';
 import { getTableContext } from '../context';
 import { buildCellAttrsFromTemplate } from './helpers';
-import { suggestionModeKey } from '../../../../plugins/suggestionMode';
-import { mintRevisionId } from '../../../../plugins/revisionIds';
-
-function makeSuggestionInfo(state: EditorState): {
-  revisionId: number;
-  author: string;
-  date: string | null;
-} | null {
-  const pluginState = suggestionModeKey.getState(state);
-  if (!pluginState?.active) return null;
-  return {
-    revisionId: mintRevisionId(),
-    author: pluginState.author,
-    date: new Date().toISOString(),
-  };
-}
+import { makeRevisionInfo as makeSuggestionInfo } from '../../../../plugins/revisionIds';
 
 /**
  * Build a tracked-row-insertion row + cells. Caller decides where to insert.
@@ -36,7 +21,7 @@ function makeSuggestionInfo(state: EditorState): {
 function buildSuggestingRow(
   schema: Schema,
   templateRow: PMNode,
-  info: { revisionId: number; author: string; date: string | null }
+  info: import('../../../../../types/content/trackedChange').RevisionInfo
 ): PMNode {
   const cells: PMNode[] = [];
   templateRow.forEach((cell) => {

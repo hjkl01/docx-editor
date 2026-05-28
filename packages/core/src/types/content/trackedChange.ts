@@ -28,6 +28,21 @@ export interface TrackedChangeInfo {
 }
 
 /**
+ * Tracked-change attribute triple as it appears on PM node attrs
+ * (`paragraph.pPrIns`, `tableRow.trIns`, etc). Mirrors `TrackedChangeInfo`
+ * but with a `null` date (PM attr defaults) and a `revisionId` name that
+ * matches OOXML's `w:id` more idiomatically on the editor side.
+ *
+ * Round-trip pairs with `TrackedChangeInfo` via
+ * `{ id, author, date? } ↔ { revisionId, author, date | null }`.
+ */
+export interface RevisionInfo {
+  revisionId: number;
+  author: string;
+  date: string | null;
+}
+
+/**
  * Generic tracked property-change wrapper metadata (w:*PrChange)
  */
 export interface PropertyChangeInfo extends TrackedChangeInfo {

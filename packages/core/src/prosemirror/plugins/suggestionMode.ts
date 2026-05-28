@@ -531,7 +531,15 @@ export function createSuggestionModePlugin(initialActive = false, author = 'User
       const pluginState = suggestionModeKey.getState(newState);
       if (!pluginState?.active) return null;
 
-      const userTr = transactions.find((tr) => tr.docChanged && !tr.getMeta(SUGGESTION_META));
+      // Skip the catch-all mark-as-insertion path for both:
+      //   - transactions we've already authored (`SUGGESTION_META`)
+      //   - accept/reject command transactions (`SUGGESTION_BYPASS_META`)
+      // The bypass meta is set by `resolveById` so structural-revision joins
+      // (e.g. `pPrIns` reject → `tr.split` + `tr.setNodeMarkup`) aren't
+      // re-wrapped as user insertions.
+      const userTr = transactions.find(
+        (tr) => tr.docChanged && !tr.getMeta(SUGGESTION_META) && !tr.getMeta(SUGGESTION_BYPASS_META)
+      );
       if (!userTr) return null;
 
       const insertionType = newState.schema.marks.insertion;
