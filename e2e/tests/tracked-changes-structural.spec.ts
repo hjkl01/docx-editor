@@ -162,8 +162,12 @@ test.describe('Tracked paragraph-mark revisions (issue #614)', () => {
 
     await setSuggestionMode(page, true, 'Jane');
     await page.keyboard.press('Backspace');
+    // Wait for React to flush the Backspace transaction. Without this the
+    // `getParaRevision` read can race against the dispatch and see stale attrs.
+    await page.waitForTimeout(50);
 
     const before = await getParaRevision(page, 0);
+    expect(before?.pPrDel, 'Backspace must set pPrDel on previous paragraph').not.toBeNull();
     const revId = before?.pPrDel?.revisionId as number;
 
     expect(await acceptById(page, revId)).toBe(true);
@@ -182,8 +186,10 @@ test.describe('Tracked paragraph-mark revisions (issue #614)', () => {
 
     await setSuggestionMode(page, true, 'Jane');
     await page.keyboard.press('Backspace');
+    await page.waitForTimeout(50);
 
     const before = await getParaRevision(page, 0);
+    expect(before?.pPrDel, 'Backspace must set pPrDel on previous paragraph').not.toBeNull();
     const revId = before?.pPrDel?.revisionId as number;
 
     expect(await rejectById(page, revId)).toBe(true);
@@ -243,10 +249,10 @@ test.describe('Tracked paragraph-mark revisions (issue #614)', () => {
       };
       return w.__DOCX_EDITOR_E2E__?.getParagraphAttrs?.(0) ?? null;
     });
-    if (!before || !(before as Record<string, unknown>).pPrChange) {
-      test.skip(true, 'plantParagraphPropertyChange helper not wired — fixture-only path');
-      return;
-    }
+    // The helper IS wired in examples/vite/src/App.tsx; assert presence rather
+    // than skipping, so a future regression of the helper surfaces here.
+    expect(before, 'plantParagraphPropertyChange helper must populate pPrChange').toBeTruthy();
+    expect((before as Record<string, unknown>).pPrChange).toBeTruthy();
     // Reject restores `alignment: 'left'` via applyPriorParagraphFormattingToAttrs.
     const ok = await rejectById(page, 99);
     expect(ok).toBe(true);

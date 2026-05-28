@@ -96,13 +96,20 @@ function buildParagraphMarkRPr(
 }
 
 /**
- * Serialize paragraph formatting properties to w:pPr XML
+ * Serialize paragraph formatting properties to w:pPr XML.
+ *
+ * `options.baseOnly` emits a `CT_PPrBase`-shaped element — no nested `<w:rPr>`
+ * (paragraph-mark properties), no nested `<w:pPrChange>`. Use this when
+ * emitting the inner `<w:pPr>` of a `<w:pPrChange>` element, which the
+ * schema (wml.xsd `CT_PPrChange` / `CT_PPrBase`) restricts to base
+ * properties only.
  */
 export function serializeParagraphFormatting(
   formatting: ParagraphFormatting | undefined,
   propertyChanges?: ParagraphPropertyChange[],
   pPrIns?: TrackedChangeInfo,
-  pPrDel?: TrackedChangeInfo
+  pPrDel?: TrackedChangeInfo,
+  options?: { baseOnly?: boolean }
 ): string {
   const parts: string[] = [];
 
@@ -204,16 +211,22 @@ export function serializeParagraphFormatting(
     }
   }
 
-  // Paragraph-mark rPr is built once at the end so tracked-change markers
-  // (pPrIns/pPrDel) come first inside <w:rPr> per EG_ParaRPrTrackChanges
-  // ordering, followed by any default run-properties from formatting.
-  const rPrXml = buildParagraphMarkRPr(formatting, pPrIns ?? undefined, pPrDel ?? undefined);
-  if (rPrXml) {
-    parts.push(rPrXml);
-  }
+  if (!options?.baseOnly) {
+    // Paragraph-mark rPr is built once at the end so tracked-change markers
+    // (pPrIns/pPrDel) come first inside <w:rPr> per EG_ParaRPrTrackChanges
+    // ordering, followed by any default run-properties from formatting.
+    const rPrXml = buildParagraphMarkRPr(formatting, pPrIns ?? undefined, pPrDel ?? undefined);
+    if (rPrXml) {
+      parts.push(rPrXml);
+    }
 
-  if (propertyChanges && propertyChanges.length > 0) {
-    parts.push(...propertyChanges.map((change) => serializeParagraphPropertyChange(change)));
+    // OOXML allows at most one `<w:pPrChange>` per `<w:pPr>` (CT_PPr
+    // maxOccurs="1"). The model array CAN carry several entries for in-memory
+    // history; on disk we emit only the first (the canonical prior snapshot)
+    // to stay schema-valid.
+    if (propertyChanges && propertyChanges.length > 0) {
+      parts.push(serializeParagraphPropertyChange(propertyChanges[0]));
+    }
   }
 
   if (parts.length === 0) return '';
@@ -233,16 +246,20 @@ function serializeParagraphPropertyChange(change: ParagraphPropertyChange): stri
   const authorCandidate = typeof change.info.author === 'string' ? change.info.author.trim() : '';
   const normalizedAuthor = authorCandidate.length > 0 ? authorCandidate : 'Unknown';
   const normalizedDate = typeof change.info.date === 'string' ? change.info.date.trim() : undefined;
-  const normalizedRsid = typeof change.info.rsid === 'string' ? change.info.rsid.trim() : undefined;
+  // NOTE: `w:rsid` is NOT an attribute of `CT_TrackChange` (wml.xsd:803).
+  // Some legacy code stored it on `PropertyChangeInfo`, but it must not be
+  // emitted on `<w:pPrChange>` — strict OOXML readers reject it.
   const attrs = [`w:id="${normalizedId}"`, `w:author="${escapeXml(normalizedAuthor)}"`];
   if (normalizedDate) {
     attrs.push(`w:date="${escapeXml(normalizedDate)}"`);
   }
-  if (normalizedRsid) {
-    attrs.push(`w:rsid="${escapeXml(normalizedRsid)}"`);
-  }
 
-  const previousPPrXml = serializeParagraphFormatting(change.previousFormatting) || '<w:pPr/>';
+  // The inner `<w:pPr>` is constrained to `CT_PPrBase` — no nested rPr,
+  // sectPr, or pPrChange. `baseOnly: true` enforces that.
+  const previousPPrXml =
+    serializeParagraphFormatting(change.previousFormatting, undefined, undefined, undefined, {
+      baseOnly: true,
+    }) || '<w:pPr/>';
   const previousPPrInner = extractPPrInner(previousPPrXml);
   const normalizedPreviousPPr =
     previousPPrInner.length > 0 ? `<w:pPr>${previousPPrInner}</w:pPr>` : '<w:pPr/>';

@@ -238,6 +238,9 @@ function findParagraphPropertyChangeSites(
     }> | null;
     if (!Array.isArray(changes)) return;
     changes.forEach((entry, idx) => {
+      // Defensive: skip malformed entries (no info, non-numeric id) so a
+      // bad attr cannot crash the resolver.
+      if (!entry?.info || typeof entry.info.id !== 'number') return;
       if (entry.info.id === revisionId) {
         sites.push({
           pos,
@@ -358,12 +361,20 @@ function applyPriorParagraphFormattingToAttrs(
   prior: import('../../types/document').ParagraphFormatting
 ): Record<string, unknown> {
   const next: Record<string, unknown> = { ...attrs };
+  // Field list mirrors `ParagraphFormatting` (`types/formatting.ts`). When
+  // adding a new ParagraphFormatting field, add it here too so reject can
+  // restore it. `runProperties` is intentionally excluded: it maps to
+  // `defaultTextFormatting` on the PM attr via a separate resolver path
+  // and would otherwise overwrite resolved style data with raw rPr.
   const fields: Array<keyof import('../../types/document').ParagraphFormatting> = [
     'alignment',
     'spaceBefore',
     'spaceAfter',
     'lineSpacing',
     'lineSpacingRule',
+    'beforeAutospacing',
+    'afterAutospacing',
+    'spacingExplicit',
     'indentLeft',
     'indentRight',
     'indentFirstLine',
@@ -379,6 +390,10 @@ function applyPriorParagraphFormattingToAttrs(
     'bidi',
     'outlineLevel',
     'numPr',
+    'widowControl',
+    'frame',
+    'suppressLineNumbers',
+    'suppressAutoHyphens',
   ];
   for (const f of fields) {
     if (Object.prototype.hasOwnProperty.call(prior, f)) {
