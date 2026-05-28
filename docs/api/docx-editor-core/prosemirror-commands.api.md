@@ -17,6 +17,9 @@ export function acceptAllChanges(): Command;
 // @public
 export function acceptChange(from: number, to: number): Command;
 
+// @public
+export function acceptChangeById(revisionId: number): Command;
+
 // @public (undocumented)
 export function addColumnLeft(state: EditorState, dispatch?: (tr: Transaction) => void): boolean;
 
@@ -202,6 +205,9 @@ export function rejectAllChanges(): Command;
 
 // @public
 export function rejectChange(from: number, to: number): Command;
+
+// @public
+export function rejectChangeById(revisionId: number): Command;
 
 // @public
 export function removeCommentMark(commentId: number): Command;

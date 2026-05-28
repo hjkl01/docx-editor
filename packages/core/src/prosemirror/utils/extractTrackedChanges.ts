@@ -50,6 +50,45 @@ export function extractTrackedChanges(state: EditorState | null): TrackedChanges
   const raw: TrackedChangeEntry[] = [];
   const commentToRevision = new Map<number, number>();
   doc.descendants((node, pos) => {
+    // Structural revisions on the paragraph mark itself
+    // (`<w:pPr><w:rPr><w:ins/>` / `<w:del/>`). Surface as their own entry
+    // types so the sidebar can label and dispatch them correctly.
+    if (node.type.name === 'paragraph') {
+      const ins = node.attrs.pPrIns as {
+        revisionId: number;
+        author: string;
+        date: string | null;
+      } | null;
+      const del = node.attrs.pPrDel as {
+        revisionId: number;
+        author: string;
+        date: string | null;
+      } | null;
+      if (ins) {
+        raw.push({
+          type: 'paragraphMarkInsertion',
+          text: node.textContent || '',
+          author: ins.author || '',
+          date: ins.date ?? undefined,
+          from: pos,
+          to: pos + node.nodeSize,
+          revisionId: ins.revisionId,
+        });
+      }
+      if (del) {
+        raw.push({
+          type: 'paragraphMarkDeletion',
+          text: node.textContent || '',
+          author: del.author || '',
+          date: del.date ?? undefined,
+          from: pos,
+          to: pos + node.nodeSize,
+          revisionId: del.revisionId,
+        });
+      }
+      // Descend into paragraph content; do not return here.
+    }
+
     if (!node.isText) return;
     let tcMark: Mark | null = null;
     for (const mark of node.marks) {

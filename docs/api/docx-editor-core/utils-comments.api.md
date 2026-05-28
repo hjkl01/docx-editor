@@ -32,8 +32,7 @@ export interface TrackedChangeEntry {
     text: string;
     // (undocumented)
     to: number;
-    // (undocumented)
-    type: 'insertion' | 'deletion' | 'replacement';
+    type: 'insertion' | 'deletion' | 'replacement' | 'paragraphMarkInsertion' | 'paragraphMarkDeletion';
 }
 
 // @public (undocumented)

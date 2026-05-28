@@ -73,7 +73,22 @@ export function truncateText(text: string, maxLength = 50): string {
 }
 
 export interface TrackedChangeEntry {
-  type: 'insertion' | 'deletion' | 'replacement';
+  /**
+   * `insertion`/`deletion`/`replacement` are inline run-content revisions.
+   *
+   * `paragraphMarkInsertion`/`paragraphMarkDeletion` are structural revisions
+   * on the paragraph mark itself (`<w:pPr><w:rPr><w:ins/>` / `<w:del/>`),
+   * authored by pressing Enter / Backspace in suggesting mode. For these,
+   * `text` is the affected paragraph's text (truncated) and `from`/`to`
+   * span the paragraph node; the actual accept/reject operates by
+   * `revisionId` via `acceptChangeById` / `rejectChangeById`.
+   */
+  type:
+    | 'insertion'
+    | 'deletion'
+    | 'replacement'
+    | 'paragraphMarkInsertion'
+    | 'paragraphMarkDeletion';
   text: string;
   /** For replacements: the deleted text that was replaced */
   deletedText?: string;

@@ -78,7 +78,12 @@ import {
   createStyleResolver,
   type TableContextInfo,
 } from '@eigenpal/docx-editor-core/prosemirror';
-import { acceptChange, rejectChange } from '@eigenpal/docx-editor-core/prosemirror/commands';
+import {
+  acceptChange,
+  rejectChange,
+  acceptChangeById,
+  rejectChangeById,
+} from '@eigenpal/docx-editor-core/prosemirror/commands';
 import { collectHeadings } from '@eigenpal/docx-editor-core/utils';
 
 // Paginated editor
@@ -1195,6 +1200,14 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
       const view = pagedEditorRef.current?.getView();
       if (view) rejectChange(from, to)(view.state, view.dispatch);
     },
+    onAcceptChangeById: (revisionId) => {
+      const view = pagedEditorRef.current?.getView();
+      if (view) acceptChangeById(revisionId)(view.state, view.dispatch);
+    },
+    onRejectChangeById: (revisionId) => {
+      const view = pagedEditorRef.current?.getView();
+      if (view) rejectChangeById(revisionId)(view.state, view.dispatch);
+    },
     onTrackedChangeReply: (revisionId, text) => {
       setComments((prev) => [...prev, createComment(text, author, revisionId)]);
     },
@@ -1211,6 +1224,8 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
       onCancelAddComment: (...args) => commentCallbacksRef.current.onCancelAddComment?.(...args),
       onAcceptChange: (...args) => commentCallbacksRef.current.onAcceptChange?.(...args),
       onRejectChange: (...args) => commentCallbacksRef.current.onRejectChange?.(...args),
+      onAcceptChangeById: (...args) => commentCallbacksRef.current.onAcceptChangeById?.(...args),
+      onRejectChangeById: (...args) => commentCallbacksRef.current.onRejectChangeById?.(...args),
       onTrackedChangeReply: (...args) =>
         commentCallbacksRef.current.onTrackedChangeReply?.(...args),
     }),

@@ -13,6 +13,9 @@ export interface TrackedChangeCardProps extends SidebarItemRenderProps {
   replies: Comment[];
   onAccept?: (from: number, to: number) => void;
   onReject?: (from: number, to: number) => void;
+  /** For paragraph-mark entries — accept/reject by `w:id`. */
+  onAcceptById?: (revisionId: number) => void;
+  onRejectById?: (revisionId: number) => void;
   onReply?: (revisionId: number, text: string) => void;
 }
 
@@ -24,10 +27,25 @@ export function TrackedChangeCard({
   measureRef,
   onAccept,
   onReject,
+  onAcceptById,
+  onRejectById,
   onReply,
 }: TrackedChangeCardProps) {
   const { t } = useTranslation();
   const authorName = change.author || t('trackedChanges.unknown');
+  const isParagraphMark =
+    change.type === 'paragraphMarkInsertion' || change.type === 'paragraphMarkDeletion';
+
+  const handleAccept = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (isParagraphMark) onAcceptById?.(change.revisionId);
+    else onAccept?.(change.from, change.to);
+  };
+  const handleReject = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (isParagraphMark) onRejectById?.(change.revisionId);
+    else onReject?.(change.from, change.to);
+  };
 
   return (
     <div
@@ -47,24 +65,10 @@ export function TrackedChangeCard({
         </div>
         {isExpanded && (
           <div style={{ display: 'flex', gap: 4, marginTop: 2 }}>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onAccept?.(change.from, change.to);
-              }}
-              title={t('common.accept')}
-              style={ICON_BUTTON_STYLE}
-            >
+            <button onClick={handleAccept} title={t('common.accept')} style={ICON_BUTTON_STYLE}>
               <MaterialSymbol name="check" size={20} />
             </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onReject?.(change.from, change.to);
-              }}
-              title={t('common.reject')}
-              style={ICON_BUTTON_STYLE}
-            >
+            <button onClick={handleReject} title={t('common.reject')} style={ICON_BUTTON_STYLE}>
               <MaterialSymbol name="close" size={20} />
             </button>
           </div>
@@ -82,6 +86,30 @@ export function TrackedChangeCard({
             <span style={{ color: '#137333', fontWeight: 500 }}>
               &quot;{truncateText(change.text)}&quot;
             </span>
+          </>
+        ) : change.type === 'paragraphMarkInsertion' ? (
+          <>
+            {t('revisions.paragraphMarkInserted')}
+            {change.text ? (
+              <>
+                {': '}
+                <span style={{ color: '#137333', fontWeight: 500 }}>
+                  &quot;{truncateText(change.text)}&quot;
+                </span>
+              </>
+            ) : null}
+          </>
+        ) : change.type === 'paragraphMarkDeletion' ? (
+          <>
+            {t('revisions.paragraphMarkDeleted')}
+            {change.text ? (
+              <>
+                {': '}
+                <span style={{ color: '#c5221f', fontWeight: 500 }}>
+                  &quot;{truncateText(change.text)}&quot;
+                </span>
+              </>
+            ) : null}
           </>
         ) : (
           <>

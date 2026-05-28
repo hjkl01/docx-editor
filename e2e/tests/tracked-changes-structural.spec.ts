@@ -219,4 +219,26 @@ test.describe('Tracked paragraph-mark revisions (issue #614)', () => {
     await editor.typeText('untouched');
     expect(await acceptById(page, 999999)).toBe(false);
   });
+
+  test('Sidebar surfaces a paragraph-mark revision card with accept/reject', async ({ page }) => {
+    await editor.typeText('Hello world');
+    await editor.selectRange(0, 0, 5);
+    await page.keyboard.press('ArrowRight');
+    await setSuggestionMode(page, true, 'Jane');
+    await editor.pressEnter();
+
+    // Open the unified sidebar so revision cards render.
+    const toggle = page.locator('[aria-label="Toggle comments sidebar"]');
+    if ((await toggle.getAttribute('aria-pressed')) !== 'true') {
+      await toggle.click();
+      await page.waitForTimeout(150);
+    }
+
+    // The new TrackedChangeCard uses the existing `.docx-tracked-change-card`
+    // class — confirm an entry shows up for the paragraph-mark revision.
+    const card = page.locator('.docx-unified-sidebar .docx-tracked-change-card').first();
+    await expect(card).toBeVisible();
+    await expect(card).toContainText('Jane');
+    await expect(card).toContainText('Inserted paragraph break');
+  });
 });
