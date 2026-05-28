@@ -598,3 +598,67 @@
   user-select: none;
   pointer-events: none;
 }
+
+/* =============================================================================
+ * Tracked paragraph-mark revisions (pPrIns / pPrDel)
+ *
+ * Painted DOM is the layout-paragraph fragment, NOT the hidden ProseMirror.
+ * The fragment is `position: relative`, so the change bar absolutely-positions
+ * into the left margin gutter, and the pilcrow ::after sits at the end of the
+ * paragraph's content. Both classes also tag the hidden PM <p> so any host
+ * styling that reads PM DOM (e.g. screen readers) can find the revision.
+ * ============================================================================= */
+
+.ep-root .layout-revision-pmark::before {
+  content: '';
+  position: absolute;
+  left: -10px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  pointer-events: none;
+}
+
+.ep-root .layout-revision-ins::before {
+  background-color: #2e7d32;
+}
+
+.ep-root .layout-revision-del::before {
+  background-color: #c62828;
+}
+
+.ep-root .layout-revision-pmark::after {
+  content: '¶';
+  display: inline;
+  margin-left: 2px;
+  font-weight: normal;
+  opacity: 0.75;
+}
+
+.ep-root .layout-revision-ins::after {
+  color: #2e7d32;
+}
+
+.ep-root .layout-revision-del::after {
+  color: #c62828;
+  text-decoration: line-through;
+}
+
+/* Hidden-PM mirror (toDOM): no painted fragment under it, so use a margin
+   line via box-shadow to avoid layout shift. */
+.ep-root .ep-revision-pmark {
+  box-shadow: inset 2px 0 0 currentColor;
+  padding-left: 6px;
+}
+
+.ep-root .ep-revision-ins {
+  --ep-revision-color: #2e7d32;
+}
+
+.ep-root .ep-revision-del {
+  --ep-revision-color: #c62828;
+}
+
+.ep-root .ep-revision-pmark {
+  color: var(--ep-revision-color);
+}

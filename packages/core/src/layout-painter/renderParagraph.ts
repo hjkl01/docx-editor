@@ -117,6 +117,21 @@ export function renderParagraphFragment(
     fragmentEl.dataset.continuesOnNext = 'true';
   }
 
+  // Paragraph-mark tracked-change cues. Only the LAST fragment of a paragraph
+  // carries the pilcrow (the mark belongs to the terminating glyph). Other
+  // fragments still get the margin change bar via the class so split
+  // paragraphs are visually flagged on every page.
+  const pPrIns = block.attrs?.pPrIns;
+  const pPrDel = block.attrs?.pPrDel;
+  if (pPrIns || pPrDel) {
+    const rev = pPrIns ?? pPrDel!;
+    fragmentEl.classList.add('layout-revision-pmark');
+    fragmentEl.classList.add(pPrIns ? 'layout-revision-ins' : 'layout-revision-del');
+    fragmentEl.dataset.revisionId = String(rev.revisionId);
+    fragmentEl.dataset.revisionAuthor = rev.author;
+    if (rev.date) fragmentEl.dataset.revisionDate = rev.date;
+  }
+
   // Text wrapping around floating images is handled at measurement time via
   // per-line leftOffset/rightOffset in MeasuredLine. Floating images themselves
   // skip inline rendering - they're rendered at page level.

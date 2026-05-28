@@ -4,8 +4,9 @@
  * PM commands for adding/removing comments and accepting/rejecting tracked changes.
  */
 
-import type { Command } from 'prosemirror-state';
+import type { Command, Transaction } from 'prosemirror-state';
 import type { EditorState } from 'prosemirror-state';
+import { SUGGESTION_BYPASS_META } from '../plugins/suggestionMode';
 
 /**
  * Add a comment mark to the current selection.
@@ -175,6 +176,216 @@ export function findNextChange(state: EditorState, startPos: number): ChangeRang
   }
 
   return result;
+}
+
+// ============================================================================
+// REVISION-ID-ADDRESSABLE COMMANDS (structural revisions on node attrs)
+// ============================================================================
+
+interface ParagraphMarkSite {
+  /** Position immediately before the paragraph's open tag. */
+  pos: number;
+  /** The paragraph node carrying the revision attr. */
+  // Kept as `any` here to avoid the Node import cycle; callers handle typing.
+  node: import('prosemirror-model').Node;
+  kind: 'pPrIns' | 'pPrDel';
+}
+
+/**
+ * Walk the document and collect every paragraph that carries a
+ * `pPrIns` or `pPrDel` attr with the given revision id.
+ */
+function findParagraphMarkSites(state: EditorState, revisionId: number): ParagraphMarkSite[] {
+  const sites: ParagraphMarkSite[] = [];
+  state.doc.descendants((node, pos) => {
+    if (node.type.name !== 'paragraph') return;
+    const ins = node.attrs.pPrIns as { revisionId: number } | null;
+    const del = node.attrs.pPrDel as { revisionId: number } | null;
+    if (ins && ins.revisionId === revisionId) {
+      sites.push({ pos, node, kind: 'pPrIns' });
+    }
+    if (del && del.revisionId === revisionId) {
+      sites.push({ pos, node, kind: 'pPrDel' });
+    }
+  });
+  return sites;
+}
+
+/** Find every inline `insertion`/`deletion` mark range with the given id. */
+function findInlineMarkSites(
+  state: EditorState,
+  revisionId: number
+): Array<{ from: number; to: number; markName: 'insertion' | 'deletion' }> {
+  const sites: Array<{ from: number; to: number; markName: 'insertion' | 'deletion' }> = [];
+  const insertionType = state.schema.marks.insertion;
+  const deletionType = state.schema.marks.deletion;
+  state.doc.descendants((node, pos) => {
+    if (!node.isText) return;
+    for (const mark of node.marks) {
+      if (
+        (insertionType && mark.type === insertionType) ||
+        (deletionType && mark.type === deletionType)
+      ) {
+        if (mark.attrs.revisionId === revisionId) {
+          const markName: 'insertion' | 'deletion' =
+            mark.type === insertionType ? 'insertion' : 'deletion';
+          // Coalesce contiguous siblings sharing the same id.
+          const last = sites[sites.length - 1];
+          if (last && last.markName === markName && last.to === pos) {
+            last.to = pos + node.nodeSize;
+          } else {
+            sites.push({ from: pos, to: pos + node.nodeSize, markName });
+          }
+        }
+      }
+    }
+  });
+  return sites;
+}
+
+/**
+ * Join paragraph at position `paraStart` (start-of-open-tag) with the
+ * following sibling paragraph. The joined paragraph inherits the
+ * SECOND paragraph's pPr (matches Word: the surviving mark wins). Both
+ * paragraphs must exist; caller checks.
+ */
+function joinParagraphWithNext(
+  tr: Transaction,
+  paraStart: number,
+  options: { inheritFromSecond: boolean }
+): void {
+  const para = tr.doc.nodeAt(paraStart);
+  if (!para) return;
+  const nextParaStart = paraStart + para.nodeSize;
+  const nextPara = tr.doc.nodeAt(nextParaStart);
+  if (!nextPara || nextPara.type.name !== 'paragraph') return;
+  // Per-OOXML: rejecting a paragraph-mark insertion (or accepting a deletion)
+  // collapses the boundary; the resulting paragraph's properties come from
+  // the SECOND paragraph (the one whose mark survives the join).
+  if (options.inheritFromSecond) {
+    // Replace para's attrs with nextPara's attrs first, then join.
+    tr.setNodeMarkup(paraStart, undefined, { ...nextPara.attrs, pPrIns: null, pPrDel: null });
+  }
+  // `tr.join(pos)` joins the block ending immediately before `pos` with
+  // the block starting at `pos`. `nextParaStart` is between the two paragraphs.
+  tr.join(nextParaStart);
+}
+
+/** Clear pPrIns/pPrDel attrs on the paragraph at `paraStart`. */
+function clearParagraphMarkRevision(
+  tr: Transaction,
+  paraStart: number,
+  kind: 'pPrIns' | 'pPrDel'
+): void {
+  const para = tr.doc.nodeAt(paraStart);
+  if (!para) return;
+  const newAttrs = { ...para.attrs };
+  newAttrs[kind] = null;
+  tr.setNodeMarkup(paraStart, undefined, newAttrs);
+}
+
+/**
+ * Resolve every site sharing a revision id in one PM transaction. Bypass
+ * the suggesting-mode keymap (we're applying, not authoring).
+ *
+ * Per-marker semantics (see openspec/changes/tracked-structural-changes):
+ *   accept pPrIns → clear marker, keep split.
+ *   reject pPrIns → join with following paragraph; result inherits second's pPr.
+ *   accept pPrDel → join with following paragraph; result inherits second's pPr.
+ *   reject pPrDel → clear marker, keep split.
+ *   accept insertion mark → keep text, drop mark.
+ *   reject insertion mark → remove text and mark.
+ *   accept deletion mark → remove text and mark.
+ *   reject deletion mark → keep text, drop mark.
+ */
+function resolveById(revisionId: number, mode: 'accept' | 'reject'): Command {
+  return (state, dispatch) => {
+    const paragraphMarkSites = findParagraphMarkSites(state, revisionId);
+    const inlineSites = findInlineMarkSites(state, revisionId);
+    if (paragraphMarkSites.length === 0 && inlineSites.length === 0) return false;
+
+    if (!dispatch) return true;
+
+    const tr = state.tr;
+    tr.setMeta(SUGGESTION_BYPASS_META, true);
+
+    // Process inline marks FIRST (positions still valid in original doc), in
+    // reverse order so deletions don't shift earlier positions.
+    const insertionType = state.schema.marks.insertion;
+    const deletionType = state.schema.marks.deletion;
+    const sortedInline = [...inlineSites].sort((a, b) => b.from - a.from);
+    for (const site of sortedInline) {
+      const isInsertion = site.markName === 'insertion';
+      const removeText = (mode === 'accept' && !isInsertion) || (mode === 'reject' && isInsertion);
+      if (removeText) {
+        tr.delete(site.from, site.to);
+      } else {
+        const markType = isInsertion ? insertionType : deletionType;
+        if (markType) tr.removeMark(site.from, site.to, markType);
+      }
+    }
+
+    // Then process paragraph-mark revisions. Process in reverse position order
+    // so earlier-positioned joins don't shift later sites. Track resolved
+    // positions through tr.mapping.
+    const sortedPara = [...paragraphMarkSites].sort((a, b) => b.pos - a.pos);
+    for (const site of sortedPara) {
+      const mappedPos = tr.mapping.map(site.pos);
+      const liveNode = tr.doc.nodeAt(mappedPos);
+      if (!liveNode || liveNode.type.name !== 'paragraph') continue;
+      // Re-confirm the revision is still on the live node (inline-mark
+      // deletions above may have removed text but won't have removed the
+      // paragraph attrs).
+      const stillHasIns =
+        site.kind === 'pPrIns' &&
+        (liveNode.attrs.pPrIns as { revisionId: number } | null)?.revisionId === revisionId;
+      const stillHasDel =
+        site.kind === 'pPrDel' &&
+        (liveNode.attrs.pPrDel as { revisionId: number } | null)?.revisionId === revisionId;
+      if (!stillHasIns && !stillHasDel) continue;
+
+      const shouldJoin =
+        (mode === 'reject' && site.kind === 'pPrIns') ||
+        (mode === 'accept' && site.kind === 'pPrDel');
+
+      if (shouldJoin) {
+        // No following paragraph → just clear the marker (last-paragraph edge case).
+        const liveParaEnd = mappedPos + liveNode.nodeSize;
+        const after = tr.doc.nodeAt(liveParaEnd);
+        if (!after || after.type.name !== 'paragraph') {
+          clearParagraphMarkRevision(tr, mappedPos, site.kind);
+        } else {
+          // Clear our marker first, then perform the join inheriting the
+          // second paragraph's pPr.
+          clearParagraphMarkRevision(tr, mappedPos, site.kind);
+          joinParagraphWithNext(tr, mappedPos, { inheritFromSecond: true });
+        }
+      } else {
+        clearParagraphMarkRevision(tr, mappedPos, site.kind);
+      }
+    }
+
+    if (tr.steps.length === 0) return false;
+    dispatch(tr);
+    return true;
+  };
+}
+
+/**
+ * Accept any revision in the document by its `w:id`. Resolves every site
+ * sharing the id (paragraph-mark attrs and inline marks) in a single PM
+ * transaction. Returns false (no-op) if the id is not present.
+ */
+export function acceptChangeById(revisionId: number): Command {
+  return resolveById(revisionId, 'accept');
+}
+
+/**
+ * Reject any revision in the document by its `w:id`. Inverse of accept
+ * per the Word semantics table in the spec.
+ */
+export function rejectChangeById(revisionId: number): Command {
+  return resolveById(revisionId, 'reject');
 }
 
 /**

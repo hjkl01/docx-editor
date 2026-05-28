@@ -268,6 +268,12 @@ function convertParagraphAttrs(
     }
   }
 
+  // Paragraph-mark tracked-change attrs — surface to the painter and to the
+  // measurement cache key so revised paragraphs paint their pilcrow / change
+  // bar and don't cross-pollute the cache with same-text-no-revision peers.
+  if (pmAttrs.pPrIns) attrs.pPrIns = pmAttrs.pPrIns;
+  if (pmAttrs.pPrDel) attrs.pPrDel = pmAttrs.pPrDel;
+
   return attrs;
 }
 

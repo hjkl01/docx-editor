@@ -325,6 +325,15 @@ export type ParagraphAttrs = {
    * (#381).
    */
   suppressEmptyParagraphHeight?: boolean;
+  /**
+   * Tracked-change marker on the paragraph mark itself
+   * (`<w:pPr><w:rPr><w:ins/>`). The painter renders a pilcrow and margin
+   * change bar; the cache key includes presence so two paragraphs with
+   * different revisions don't share a measurement.
+   */
+  pPrIns?: { revisionId: number; author: string; date: string | null } | null;
+  /** Tracked-change marker on the paragraph mark (`<w:pPr><w:rPr><w:del/>`). */
+  pPrDel?: { revisionId: number; author: string; date: string | null } | null;
 };
 
 /**
