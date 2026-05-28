@@ -1,5 +1,11 @@
 # @eigenpal/nuxt-docx-editor
 
+## 1.0.4
+
+### Patch Changes
+
+- @eigenpal/docx-editor-vue@1.0.4
+
 ## 1.0.3
 
 ### Patch Changes
