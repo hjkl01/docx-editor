@@ -386,6 +386,29 @@ function renderNestedTable(
     tableEl.dataset.pmEnd = String(block.pmEnd);
   }
 
+  // Whole-table tracked insertion / deletion — every row carries the same
+  // revision id. Paint ONE tall bar on the table itself (matches user's
+  // "green indication to the left of the whole table" mental model) and
+  // tell renderTableRow to skip the per-row bar so we don't double-paint.
+  const firstRow = block.rows[0];
+  const sharedTrIns = firstRow?.trackedIns;
+  const sharedTrDel = firstRow?.trackedDel;
+  const wholeTableTracked =
+    block.rows.length > 0 &&
+    block.rows.every((r) => {
+      if (sharedTrIns) return r.trackedIns?.revisionId === sharedTrIns.revisionId;
+      if (sharedTrDel) return r.trackedDel?.revisionId === sharedTrDel.revisionId;
+      return false;
+    });
+  if (wholeTableTracked) {
+    const tableRev = (sharedTrIns ?? sharedTrDel) as RevisionInfo;
+    const kind = sharedTrIns ? 'ins' : 'del';
+    tableEl.classList.add('ep-revision-table', `ep-revision-${kind}`);
+    tableEl.dataset.revisionId = String(tableRev.revisionId);
+    tableEl.dataset.revisionAuthor = tableRev.author;
+    if (tableRev.date) tableEl.dataset.revisionDate = tableRev.date;
+  }
+
   // Build row Y positions for rowSpan height calculation
   const rowYPositions: number[] = [];
   let yPos = 0;
@@ -416,7 +439,9 @@ function renderNestedTable(
       context,
       doc,
       spanningCells,
-      rowYPositions
+      rowYPositions,
+      undefined,
+      wholeTableTracked
     );
     tableEl.appendChild(rowEl);
     y += rowMeasure.height;
@@ -589,7 +614,10 @@ function renderTableRow(
   doc: Document,
   spanningCells?: Map<string, SpanningCell>,
   rowYPositions?: number[],
-  isFirstRowInFragment?: boolean
+  isFirstRowInFragment?: boolean,
+  /** When the parent table already carries a whole-table revision bar,
+   * the per-row bar would double-paint. Suppress. */
+  suppressRowRevisionVisual?: boolean
 ): HTMLElement {
   const rowEl = doc.createElement('div');
   rowEl.className = TABLE_CLASS_NAMES.row;
@@ -597,10 +625,12 @@ function renderTableRow(
   // Tracked-row marker (sidebar reads the same data attrs as cells).
   // Prefer `del` when both flags are present (rare; "ins of a row that
   // was later marked deleted" — the deletion is the more recent action).
-  if (row.trackedDel) {
-    applyRevisionAttrs(rowEl, 'row', 'del', row.trackedDel);
-  } else if (row.trackedIns) {
-    applyRevisionAttrs(rowEl, 'row', 'ins', row.trackedIns);
+  if (!suppressRowRevisionVisual) {
+    if (row.trackedDel) {
+      applyRevisionAttrs(rowEl, 'row', 'del', row.trackedDel);
+    } else if (row.trackedIns) {
+      applyRevisionAttrs(rowEl, 'row', 'ins', row.trackedIns);
+    }
   }
 
   // Positioning
@@ -762,6 +792,29 @@ export function renderTableFragment(
     tableEl.dataset.pmEnd = String(fragment.pmEnd);
   }
 
+  // Whole-table tracked insertion / deletion — every row shares the same
+  // revision id (Word's canonical shape for "user inserted a table while
+  // track-changes was on"). Paint ONE tall bar on the table itself; the
+  // per-row bars are suppressed below to avoid double-painting.
+  const firstFragRow = block.rows[0];
+  const sharedFragIns = firstFragRow?.trackedIns;
+  const sharedFragDel = firstFragRow?.trackedDel;
+  const fragWholeTableTracked =
+    block.rows.length > 0 &&
+    block.rows.every((r) => {
+      if (sharedFragIns) return r.trackedIns?.revisionId === sharedFragIns.revisionId;
+      if (sharedFragDel) return r.trackedDel?.revisionId === sharedFragDel.revisionId;
+      return false;
+    });
+  if (fragWholeTableTracked) {
+    const tableRev = (sharedFragIns ?? sharedFragDel) as RevisionInfo;
+    const kind = sharedFragIns ? 'ins' : 'del';
+    tableEl.classList.add('ep-revision-table', `ep-revision-${kind}`);
+    tableEl.dataset.revisionId = String(tableRev.revisionId);
+    tableEl.dataset.revisionAuthor = tableRev.author;
+    if (tableRev.date) tableEl.dataset.revisionDate = tableRev.date;
+  }
+
   // Add column resize handles at each column boundary
   let handleX = 0;
   for (let col = 0; col < measure.columnWidths.length - 1; col++) {
@@ -815,7 +868,8 @@ export function renderTableFragment(
         doc,
         spanningCells,
         rowYPositions,
-        hdrIdx === 0 // first header row draws top border
+        hdrIdx === 0, // first header row draws top border
+        fragWholeTableTracked
       );
       rowEl.dataset.repeatedHeader = 'true';
       tableEl.appendChild(rowEl);
@@ -847,7 +901,8 @@ export function renderTableFragment(
       doc,
       spanningCells,
       rowYPositions,
-      isFirstRowInFragment
+      isFirstRowInFragment,
+      fragWholeTableTracked
     );
 
     tableEl.appendChild(rowEl);
