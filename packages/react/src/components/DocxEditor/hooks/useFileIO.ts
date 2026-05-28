@@ -12,6 +12,7 @@ import {
   clearTrackedChanges,
 } from '@eigenpal/docx-editor-core/prosemirror/extensions';
 import { readDocxFileFromInput, type DocxInput } from '@eigenpal/docx-editor-core/utils';
+import { makeRevisionInfo } from '@eigenpal/docx-editor-core/prosemirror/plugins';
 import type { EditorView } from 'prosemirror-view';
 import type { PagedEditorRef } from '../PagedEditor';
 
@@ -262,6 +263,22 @@ body { background: white; }
 
           const { from } = view.state.selection;
           const tr = view.state.tr.insert(from, imageNode);
+          // Track the insertion in suggesting mode — wrap the inserted
+          // image node with an `insertion` mark so it round-trips as a
+          // tracked addition (Word's convention: <w:ins>{img run}</w:ins>).
+          const info = makeRevisionInfo(view.state);
+          const insertionType = view.state.schema.marks.insertion;
+          if (info && insertionType) {
+            tr.addMark(
+              from,
+              from + imageNode.nodeSize,
+              insertionType.create({
+                revisionId: info.revisionId,
+                author: info.author,
+                date: info.date,
+              })
+            );
+          }
           view.dispatch(tr.scrollIntoView());
           focusActiveEditor();
         };

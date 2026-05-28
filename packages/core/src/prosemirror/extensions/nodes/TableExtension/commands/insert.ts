@@ -47,13 +47,19 @@ function buildSuggestingRow(
 /**
  * Build a fresh table node with the given dimensions and border color.
  * Default border is thin (4 eighths-of-a-point) black single.
+ *
+ * If `info` is provided (suggesting mode), every row gets `trIns` and
+ * every cell gets `cellMarker: { kind: 'ins', info }` so the new table
+ * round-trips as a fully tracked addition — matches Word's convention
+ * for "insert table while track-changes is on".
  */
 export function makeCreateTable(schema: Schema) {
   return function createTable(
     rows: number,
     cols: number,
     borderColor: string = '000000',
-    contentWidthTwips: number = 9360
+    contentWidthTwips: number = 9360,
+    info?: import('../../../../../types/content/trackedChange').RevisionInfo | null
   ): PMNode {
     const tableRows: PMNode[] = [];
     const colWidthTwips = Math.floor(contentWidthTwips / cols);
@@ -79,14 +85,17 @@ export function makeCreateTable(schema: Schema) {
           width: colWidthTwips,
           widthType: 'dxa',
         };
+        if (info) {
+          cellAttrs.cellMarker = { kind: 'ins' as const, info };
+        }
         cells.push(schema.nodes.tableCell.create(cellAttrs, paragraph));
       }
-      tableRows.push(
-        schema.nodes.tableRow.create(
-          { height: defaultRowHeightTwips, heightRule: defaultRowHeightRule },
-          cells
-        )
-      );
+      const rowAttrs: Record<string, unknown> = {
+        height: defaultRowHeightTwips,
+        heightRule: defaultRowHeightRule,
+      };
+      if (info) rowAttrs.trIns = info;
+      tableRows.push(schema.nodes.tableRow.create(rowAttrs, cells));
     }
 
     const columnWidths = Array(cols).fill(colWidthTwips);
@@ -143,7 +152,12 @@ export function makeInsertTable(schema: Schema) {
             break;
           }
         }
-        const table = createTable(rows, cols, borderColor, contentWidthTwips);
+        // In suggesting mode, mint one revision triple and seed every row
+        // and cell of the new table with trIns + cellMarker:ins. The new
+        // table round-trips as a tracked addition; reject removes the whole
+        // table via resolveById, accept clears the markers.
+        const suggestingInfo = makeSuggestionInfo(state);
+        const table = createTable(rows, cols, borderColor, contentWidthTwips, suggestingInfo);
         const emptyParagraph = schema.nodes.paragraph.create();
 
         const $insert = state.doc.resolve(insertPos);
