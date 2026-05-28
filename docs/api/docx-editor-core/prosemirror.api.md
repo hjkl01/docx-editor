@@ -369,6 +369,7 @@ export interface ParagraphAttrs {
     pageBreakBefore?: boolean;
     // (undocumented)
     paraId?: string;
+    pPrChange?: ParagraphPropertyChange[] | null;
     pPrDel?: {
         revisionId: number;
         author: string;

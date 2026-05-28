@@ -88,7 +88,8 @@ export interface TrackedChangeEntry {
     | 'deletion'
     | 'replacement'
     | 'paragraphMarkInsertion'
-    | 'paragraphMarkDeletion';
+    | 'paragraphMarkDeletion'
+    | 'paragraphPropertiesChanged';
   text: string;
   /** For replacements: the deleted text that was replaced */
   deletedText?: string;

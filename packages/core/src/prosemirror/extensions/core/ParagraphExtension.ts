@@ -298,6 +298,10 @@ const paragraphNodeSpec: NodeSpec = {
     // See ECMA-376 §17.13.5 — w:ins / w:del inside w:pPr/w:rPr.
     pPrIns: { default: null },
     pPrDel: { default: null },
+    // Paragraph property changes (w:pPrChange), array of prior-snapshot
+    // entries. Parser/serializer already model this — schema attr lets
+    // the data survive the toProseDoc → fromProseDoc round-trip.
+    pPrChange: { default: null },
   },
   parseDOM: [
     {

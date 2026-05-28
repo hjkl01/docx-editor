@@ -344,6 +344,12 @@ function paragraphFormattingToAttrs(
     };
   }
 
+  // Paragraph-property change history (w:pPrChange). Passed through as the
+  // model array; serializer reads it back via fromProseDoc.
+  if (paragraph.propertyChanges && paragraph.propertyChanges.length > 0) {
+    attrs.pPrChange = paragraph.propertyChanges;
+  }
+
   return attrs;
 }
 

@@ -94,6 +94,10 @@ export function convertPMParagraph(node: PMNode, documentCounts?: TrackedChangeC
       ...(attrs.pPrDel.date ? { date: attrs.pPrDel.date } : {}),
     };
   }
+  // Round-trip paragraph-property-change history.
+  if (attrs.pPrChange && attrs.pPrChange.length > 0) {
+    paragraph.propertyChanges = attrs.pPrChange;
+  }
 
   // Restore full section properties (round-trip) or fallback to break type only
   if (attrs._sectionProperties) {

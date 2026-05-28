@@ -191,6 +191,15 @@ interface ParagraphMarkSite {
   kind: 'pPrIns' | 'pPrDel';
 }
 
+interface ParagraphPropertyChangeSite {
+  pos: number;
+  node: import('prosemirror-model').Node;
+  /** Index into the paragraph's `pPrChange` array (since multiple authors can stack). */
+  entryIndex: number;
+  /** The prior `ParagraphFormatting` snapshot from the matching entry. */
+  prior: import('../../types/document').ParagraphFormatting | undefined;
+}
+
 /**
  * Walk the document and collect every paragraph that carries a
  * `pPrIns` or `pPrDel` attr with the given revision id.
@@ -207,6 +216,39 @@ function findParagraphMarkSites(state: EditorState, revisionId: number): Paragra
     if (del && del.revisionId === revisionId) {
       sites.push({ pos, node, kind: 'pPrDel' });
     }
+  });
+  return sites;
+}
+
+/**
+ * Walk the document for paragraph nodes whose `pPrChange` array has an
+ * entry with `info.id === revisionId`. Returns one site per matching entry
+ * with the entry index for later mutation.
+ */
+function findParagraphPropertyChangeSites(
+  state: EditorState,
+  revisionId: number
+): ParagraphPropertyChangeSite[] {
+  const sites: ParagraphPropertyChangeSite[] = [];
+  state.doc.descendants((node, pos) => {
+    if (node.type.name !== 'paragraph') return;
+    const changes = node.attrs.pPrChange as Array<{
+      info: { id: number };
+      previousFormatting?: unknown;
+    }> | null;
+    if (!Array.isArray(changes)) return;
+    changes.forEach((entry, idx) => {
+      if (entry.info.id === revisionId) {
+        sites.push({
+          pos,
+          node,
+          entryIndex: idx,
+          prior: entry.previousFormatting as
+            | import('../../types/document').ParagraphFormatting
+            | undefined,
+        });
+      }
+    });
   });
   return sites;
 }
@@ -285,6 +327,68 @@ function clearParagraphMarkRevision(
 }
 
 /**
+ * Remove a `pPrChange` entry by array index from the paragraph at `paraStart`.
+ * If the array becomes empty, the attr is set to `null` so PM treats it as
+ * absent on save.
+ */
+function clearParagraphPropertyChangeEntry(
+  tr: Transaction,
+  paraStart: number,
+  entryIndex: number
+): void {
+  const para = tr.doc.nodeAt(paraStart);
+  if (!para) return;
+  const existing = para.attrs.pPrChange as Array<unknown> | null;
+  if (!Array.isArray(existing) || entryIndex < 0 || entryIndex >= existing.length) return;
+  const next = existing.slice();
+  next.splice(entryIndex, 1);
+  tr.setNodeMarkup(paraStart, undefined, {
+    ...para.attrs,
+    pPrChange: next.length > 0 ? next : null,
+  });
+}
+
+/**
+ * Restore fields from a prior `ParagraphFormatting` snapshot onto the
+ * paragraph's PM attrs. Only the user-visible fields are copied — anything
+ * not in `prior` is left untouched.
+ */
+function applyPriorParagraphFormattingToAttrs(
+  attrs: Record<string, unknown>,
+  prior: import('../../types/document').ParagraphFormatting
+): Record<string, unknown> {
+  const next: Record<string, unknown> = { ...attrs };
+  const fields: Array<keyof import('../../types/document').ParagraphFormatting> = [
+    'alignment',
+    'spaceBefore',
+    'spaceAfter',
+    'lineSpacing',
+    'lineSpacingRule',
+    'indentLeft',
+    'indentRight',
+    'indentFirstLine',
+    'hangingIndent',
+    'styleId',
+    'borders',
+    'shading',
+    'tabs',
+    'pageBreakBefore',
+    'keepNext',
+    'keepLines',
+    'contextualSpacing',
+    'bidi',
+    'outlineLevel',
+    'numPr',
+  ];
+  for (const f of fields) {
+    if (Object.prototype.hasOwnProperty.call(prior, f)) {
+      next[f as string] = prior[f] ?? null;
+    }
+  }
+  return next;
+}
+
+/**
  * Resolve every site sharing a revision id in one PM transaction. Bypass
  * the suggesting-mode keymap (we're applying, not authoring).
  *
@@ -302,7 +406,14 @@ function resolveById(revisionId: number, mode: 'accept' | 'reject'): Command {
   return (state, dispatch) => {
     const paragraphMarkSites = findParagraphMarkSites(state, revisionId);
     const inlineSites = findInlineMarkSites(state, revisionId);
-    if (paragraphMarkSites.length === 0 && inlineSites.length === 0) return false;
+    const propChangeSites = findParagraphPropertyChangeSites(state, revisionId);
+    if (
+      paragraphMarkSites.length === 0 &&
+      inlineSites.length === 0 &&
+      propChangeSites.length === 0
+    ) {
+      return false;
+    }
 
     if (!dispatch) return true;
 
@@ -362,6 +473,34 @@ function resolveById(revisionId: number, mode: 'accept' | 'reject'): Command {
         }
       } else {
         clearParagraphMarkRevision(tr, mappedPos, site.kind);
+      }
+    }
+
+    // Finally, paragraph-property changes. Accept clears the matching entry
+    // (current props win). Reject restores the entry's `prior` fields onto
+    // the paragraph's attrs and clears the entry.
+    const sortedPropChanges = [...propChangeSites].sort((a, b) => b.pos - a.pos);
+    for (const site of sortedPropChanges) {
+      const mappedPos = tr.mapping.map(site.pos);
+      const liveNode = tr.doc.nodeAt(mappedPos);
+      if (!liveNode || liveNode.type.name !== 'paragraph') continue;
+      const liveChanges = liveNode.attrs.pPrChange as Array<{ info: { id: number } }> | null;
+      if (!Array.isArray(liveChanges)) continue;
+      const liveIndex = liveChanges.findIndex((e) => e.info.id === revisionId);
+      if (liveIndex < 0) continue;
+
+      if (mode === 'reject' && site.prior) {
+        // Restore prior fields BEFORE clearing the entry so we don't lose
+        // the snapshot in the intermediate state.
+        const restored = applyPriorParagraphFormattingToAttrs(liveNode.attrs, site.prior);
+        const nextChanges = liveChanges.slice();
+        nextChanges.splice(liveIndex, 1);
+        tr.setNodeMarkup(mappedPos, undefined, {
+          ...restored,
+          pPrChange: nextChanges.length > 0 ? nextChanges : null,
+        });
+      } else {
+        clearParagraphPropertyChangeEntry(tr, mappedPos, liveIndex);
       }
     }
 

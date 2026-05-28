@@ -86,6 +86,24 @@ export function extractTrackedChanges(state: EditorState | null): TrackedChanges
           revisionId: del.revisionId,
         });
       }
+      // Paragraph-property changes — one entry per (id, author, date) entry
+      // in the pPrChange array. Reject restores prior values; accept clears.
+      const pPrChange = node.attrs.pPrChange as Array<{
+        info: { id: number; author: string; date?: string };
+      }> | null;
+      if (Array.isArray(pPrChange)) {
+        for (const entry of pPrChange) {
+          raw.push({
+            type: 'paragraphPropertiesChanged',
+            text: node.textContent || '',
+            author: entry.info.author || '',
+            date: entry.info.date ?? undefined,
+            from: pos,
+            to: pos + node.nodeSize,
+            revisionId: entry.info.id,
+          });
+        }
+      }
       // Descend into paragraph content; do not return here.
     }
 

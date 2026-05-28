@@ -149,6 +149,17 @@ export interface ParagraphAttrs {
    * the following one; reject clears the marker, keeping the split.
    */
   pPrDel?: { revisionId: number; author: string; date: string | null } | null;
+
+  /**
+   * Paragraph property changes (`<w:pPrChange>`). Each entry carries
+   * the OOXML triple plus a `prior` snapshot of the paragraph properties
+   * before the edit. Array because multiple authors can stack edits on
+   * the same paragraph; on reject by id, only the matching entry's prior
+   * is restored. The shape mirrors the existing model
+   * `Paragraph.propertyChanges: ParagraphPropertyChange[]` — see
+   * `packages/core/src/types/content/trackedChange.ts`.
+   */
+  pPrChange?: import('../../types/document').ParagraphPropertyChange[] | null;
 }
 
 /**

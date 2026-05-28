@@ -34,7 +34,9 @@ export function TrackedChangeCard({
   const { t } = useTranslation();
   const authorName = change.author || t('trackedChanges.unknown');
   const isParagraphMark =
-    change.type === 'paragraphMarkInsertion' || change.type === 'paragraphMarkDeletion';
+    change.type === 'paragraphMarkInsertion' ||
+    change.type === 'paragraphMarkDeletion' ||
+    change.type === 'paragraphPropertiesChanged';
 
   const handleAccept = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -106,6 +108,18 @@ export function TrackedChangeCard({
               <>
                 {': '}
                 <span style={{ color: '#c5221f', fontWeight: 500 }}>
+                  &quot;{truncateText(change.text)}&quot;
+                </span>
+              </>
+            ) : null}
+          </>
+        ) : change.type === 'paragraphPropertiesChanged' ? (
+          <>
+            {t('revisions.paragraphPropertiesChanged')}
+            {change.text ? (
+              <>
+                {': '}
+                <span style={{ color: '#5f6368', fontWeight: 500 }}>
                   &quot;{truncateText(change.text)}&quot;
                 </span>
               </>

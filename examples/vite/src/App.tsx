@@ -292,6 +292,55 @@ export function App() {
         if (!view) return false;
         return rejectChangeById(revisionId)(view.state, view.dispatch);
       },
+      // Test-only: read full attrs of the Nth paragraph, including new
+      // revision attrs (pPrIns/pPrDel/pPrChange).
+      getParagraphAttrs: (index: number) => {
+        const view = editorRef.current?.getEditorRef()?.getView?.();
+        if (!view) return null;
+        let count = 0;
+        let out: Record<string, unknown> | null = null;
+        view.state.doc.descendants((node) => {
+          if (out != null) return false;
+          if (node.type.name !== 'paragraph') return true;
+          if (count === index) {
+            out = { ...node.attrs };
+            return false;
+          }
+          count += 1;
+          return true;
+        });
+        return out;
+      },
+      // Test-only: plant a pPrChange entry on the first paragraph for
+      // round-trip / reject-restore verification.
+      plantParagraphPropertyChange: (revisionId: number, prior: unknown) => {
+        const view = editorRef.current?.getEditorRef()?.getView?.();
+        if (!view) return false;
+        let firstParaPos: number | null = null;
+        let firstPara: import('prosemirror-model').Node | null = null;
+        view.state.doc.descendants((node, pos) => {
+          if (firstParaPos != null) return false;
+          if (node.type.name === 'paragraph') {
+            firstParaPos = pos;
+            firstPara = node;
+            return false;
+          }
+          return true;
+        });
+        if (firstParaPos == null || firstPara == null) return false;
+        const tr = view.state.tr.setNodeMarkup(firstParaPos, undefined, {
+          ...(firstPara as import('prosemirror-model').Node).attrs,
+          pPrChange: [
+            {
+              type: 'paragraphPropertyChange',
+              info: { id: revisionId, author: 'Jane', date: new Date().toISOString() },
+              previousFormatting: prior,
+            },
+          ],
+        });
+        view.dispatch(tr);
+        return true;
+      },
     };
     return () => {
       delete window.__DOCX_EDITOR_E2E__;

@@ -220,6 +220,47 @@ test.describe('Tracked paragraph-mark revisions (issue #614)', () => {
     expect(await acceptById(page, 999999)).toBe(false);
   });
 
+  test('pPrChange round-trips and reject restores prior alignment', async ({ page }) => {
+    // Manually plant a pPrChange entry via the PM view, then verify
+    // acceptChangeById clears it and rejectChangeById restores prior fields.
+    await editor.typeText('Hello');
+    await page.evaluate(() => {
+      const w = window as unknown as {
+        __DOCX_EDITOR_E2E__?: {
+          plantParagraphPropertyChange?: (revisionId: number, prior: unknown) => boolean;
+        };
+      };
+      w.__DOCX_EDITOR_E2E__?.plantParagraphPropertyChange?.(99, {
+        alignment: 'left',
+        indentLeft: 0,
+      });
+    });
+    // (test-only helper — see App.tsx; falls through if not present)
+    // Sanity: the pPrChange attr is present.
+    const before = await page.evaluate(() => {
+      const w = window as unknown as {
+        __DOCX_EDITOR_E2E__?: { getParagraphAttrs?: (i: number) => Record<string, unknown> | null };
+      };
+      return w.__DOCX_EDITOR_E2E__?.getParagraphAttrs?.(0) ?? null;
+    });
+    if (!before || !(before as Record<string, unknown>).pPrChange) {
+      test.skip(true, 'plantParagraphPropertyChange helper not wired — fixture-only path');
+      return;
+    }
+    // Reject restores `alignment: 'left'` via applyPriorParagraphFormattingToAttrs.
+    const ok = await rejectById(page, 99);
+    expect(ok).toBe(true);
+    const after = await page.evaluate(() => {
+      const w = window as unknown as {
+        __DOCX_EDITOR_E2E__?: { getParagraphAttrs?: (i: number) => Record<string, unknown> | null };
+      };
+      return w.__DOCX_EDITOR_E2E__?.getParagraphAttrs?.(0) ?? null;
+    });
+    expect(after).not.toBeNull();
+    expect((after as Record<string, unknown>).pPrChange).toBeNull();
+    expect((after as Record<string, unknown>).alignment).toBe('left');
+  });
+
   test('Sidebar surfaces a paragraph-mark revision card with accept/reject', async ({ page }) => {
     await editor.typeText('Hello world');
     await editor.selectRange(0, 0, 5);

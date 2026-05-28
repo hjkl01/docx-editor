@@ -40,6 +40,9 @@
       <template v-else-if="change.type === 'paragraphMarkDeletion'">
         Deleted paragraph break<template v-if="change.text">: <span class="tc-card__deleted">&quot;{{ truncateText(change.text) }}&quot;</span></template>
       </template>
+      <template v-else-if="change.type === 'paragraphPropertiesChanged'">
+        Changed paragraph properties<template v-if="change.text">: <span class="tc-card__changed">&quot;{{ truncateText(change.text) }}&quot;</span></template>
+      </template>
       <template v-else>
         {{ change.type === 'insertion' ? 'Added' : 'Deleted' }}
         <span :class="change.type === 'insertion' ? 'tc-card__inserted' : 'tc-card__deleted'">
@@ -84,7 +87,8 @@ const authorName = computed(() => props.change.author || 'Unknown');
 const isParagraphMark = computed(
   () =>
     props.change.type === 'paragraphMarkInsertion' ||
-    props.change.type === 'paragraphMarkDeletion'
+    props.change.type === 'paragraphMarkDeletion' ||
+    props.change.type === 'paragraphPropertiesChanged'
 );
 
 function onAccept() {
@@ -164,6 +168,10 @@ function onReject() {
 }
 .tc-card__inserted {
   color: #137333;
+  font-weight: 500;
+}
+.tc-card__changed {
+  color: #5f6368;
   font-weight: 500;
 }
 </style>
