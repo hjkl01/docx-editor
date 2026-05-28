@@ -12,8 +12,7 @@ import { type Command, type EditorState, type Transaction } from 'prosemirror-st
 import { CellSelection } from 'prosemirror-tables';
 import { getTableContext } from '../context';
 import { suggestionModeKey } from '../../../../plugins/suggestionMode';
-
-let nextRevisionId = Date.now() + 100000;
+import { mintRevisionId } from '../../../../plugins/revisionIds';
 
 function makeRevisionInfo(state: EditorState): {
   revisionId: number;
@@ -23,7 +22,7 @@ function makeRevisionInfo(state: EditorState): {
   const pluginState = suggestionModeKey.getState(state);
   if (!pluginState?.active) return null;
   return {
-    revisionId: nextRevisionId++,
+    revisionId: mintRevisionId(),
     author: pluginState.author,
     date: new Date().toISOString(),
   };
@@ -76,6 +75,11 @@ export const deleteRow: Command = (
   return true;
 };
 
+// TODO(Phase 2c): when suggesting mode is active, set `cellMarker: { kind:
+// 'del', info }` on each cell in the column rather than removing them, so
+// the column stays visible until accept. See
+// `tracked-structural-tables/spec.md` — "Track column insertion and
+// deletion in suggesting mode."
 export const deleteColumn: Command = (
   state: EditorState,
   dispatch?: (tr: Transaction) => void

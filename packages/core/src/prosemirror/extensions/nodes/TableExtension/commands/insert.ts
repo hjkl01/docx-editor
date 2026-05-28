@@ -14,8 +14,7 @@ import { type Command, type EditorState, type Transaction, TextSelection } from 
 import { getTableContext } from '../context';
 import { buildCellAttrsFromTemplate } from './helpers';
 import { suggestionModeKey } from '../../../../plugins/suggestionMode';
-
-let nextRevisionId = Date.now() + 200000;
+import { mintRevisionId } from '../../../../plugins/revisionIds';
 
 function makeSuggestionInfo(state: EditorState): {
   revisionId: number;
@@ -25,7 +24,7 @@ function makeSuggestionInfo(state: EditorState): {
   const pluginState = suggestionModeKey.getState(state);
   if (!pluginState?.active) return null;
   return {
-    revisionId: nextRevisionId++,
+    revisionId: mintRevisionId(),
     author: pluginState.author,
     date: new Date().toISOString(),
   };
@@ -50,6 +49,10 @@ function buildSuggestingRow(
     {
       height: templateRow.attrs.height ?? 360,
       heightRule: templateRow.attrs.heightRule ?? 'atLeast',
+      // Carry header status from the template row so inserting under a
+      // header keeps the new row a header (and inserting under a body
+      // keeps it a body row).
+      isHeader: templateRow.attrs.isHeader ?? false,
       trIns: info,
     },
     cells
@@ -274,6 +277,10 @@ export function makeAddRowBelow(schema: Schema): Command {
   };
 }
 
+// TODO(Phase 2c): wrap with `makeSuggestionInfo` and set
+// `cellMarker: { kind: 'ins', info }` on each new cell when suggesting mode
+// is active. See `tracked-structural-tables/spec.md` — "Track column
+// insertion and deletion in suggesting mode."
 export function makeAddColumnLeft(schema: Schema): Command {
   return (state: EditorState, dispatch?: (tr: Transaction) => void): boolean => {
     const context = getTableContext(state);
@@ -370,6 +377,8 @@ export function makeAddColumnLeft(schema: Schema): Command {
   };
 }
 
+// TODO(Phase 2c): wrap with `makeSuggestionInfo` — same pattern as
+// `makeAddColumnLeft` above.
 export function makeAddColumnRight(schema: Schema): Command {
   return (state: EditorState, dispatch?: (tr: Transaction) => void): boolean => {
     const context = getTableContext(state);

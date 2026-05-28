@@ -354,13 +354,16 @@ export function App() {
         view.state.doc.descendants((node, pos) => {
           if (target != null) return false;
           if (node.type.name === 'tableCell' || node.type.name === 'tableHeader') {
-            target = pos + 2; // inside first paragraph of cell
+            // `pos + 2` works when the first child is a paragraph (the
+            // typical case). If it's a nested table, `TextSelection.near`
+            // snaps forward to the next text-allowing position.
+            target = pos + 2;
             return false;
           }
           return true;
         });
         if (target == null) return false;
-        const tr = view.state.tr.setSelection(TextSelection.create(view.state.doc, target));
+        const tr = view.state.tr.setSelection(TextSelection.near(view.state.doc.resolve(target)));
         view.dispatch(tr);
         view.focus();
         return true;

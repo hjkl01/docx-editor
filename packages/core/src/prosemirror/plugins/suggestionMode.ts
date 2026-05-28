@@ -21,6 +21,8 @@ import {
 import type { EditorView } from 'prosemirror-view';
 import type { Node as PMNode, MarkType } from 'prosemirror-model';
 
+import { mintRevisionId } from './revisionIds';
+
 export const suggestionModeKey = new PluginKey<SuggestionModeState>('suggestionMode');
 const SUGGESTION_META = 'suggestionModeApplied';
 /** Set by accept/reject commands to bypass suggesting-mode interception. */
@@ -37,11 +39,9 @@ interface MarkAttrs {
   date: string;
 }
 
-let nextRevisionId = Date.now();
-
 function makeMarkAttrs(pluginState: SuggestionModeState): MarkAttrs {
   return {
-    revisionId: nextRevisionId++,
+    revisionId: mintRevisionId(),
     author: pluginState.author,
     date: new Date().toISOString(),
   };
