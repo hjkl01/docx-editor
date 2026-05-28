@@ -99,6 +99,36 @@ function findAdjacentRevisionForRange(
 }
 
 /**
+ * Find a `pPrIns`/`pPrDel` revision on a paragraph adjacent to `paraStart`
+ * carried by the same author. Used to coalesce consecutive Enter / Backspace
+ * presses into one tracked change so the sidebar shows a single card and
+ * a single Accept resolves the whole run (matches Word's grouping).
+ *
+ * `attr` selects which paragraph-mark attr to look for; the lookup checks
+ * BOTH the previous and next paragraph since a new pPrIns may sit either
+ * side of an existing run depending on cursor position.
+ */
+function findAdjacentParagraphMark(
+  doc: PMNode,
+  paraStart: number,
+  attr: 'pPrIns' | 'pPrDel',
+  author: string
+): MarkAttrs | null {
+  try {
+    const $pos = doc.resolve(paraStart);
+    const candidates: Array<PMNode | null | undefined> = [$pos.nodeBefore, $pos.nodeAfter];
+    for (const node of candidates) {
+      if (node?.type.name !== 'paragraph') continue;
+      const existing = node.attrs[attr] as MarkAttrs | null;
+      if (existing && existing.author === author) return existing;
+    }
+  } catch {
+    /* paragraph at start/end of doc */
+  }
+  return null;
+}
+
+/**
  * Walk a text range and either mark as deletion or retract own insertions.
  * Processes in reverse order to maintain position validity.
  */
@@ -320,10 +350,14 @@ function handleSuggestionEnter(
   // applyPostSplitInheritance expects.
   tr.split(tr.selection.from, 1);
 
-  // Set pPrIns on the FIRST paragraph (the one before the split).
+  // Set pPrIns on the FIRST paragraph (the one before the split). Coalesce
+  // with an adjacent same-author pPrIns so consecutive Enters in one editing
+  // session show as a single tracked change in the sidebar.
   const firstPara = tr.doc.nodeAt(firstParaStart);
   if (firstPara && firstPara.type.name === 'paragraph') {
-    const info = makeRevisionInfo(pluginState);
+    const info =
+      findAdjacentParagraphMark(tr.doc, firstParaStart, 'pPrIns', pluginState.author) ??
+      makeRevisionInfo(pluginState);
     tr.setNodeMarkup(firstParaStart, undefined, {
       ...firstPara.attrs,
       pPrIns: info,
@@ -377,7 +411,11 @@ function handleSuggestionBackspaceAtStart(
   if (!dispatch) return true;
 
   const prevParaStart = paraStart - prevPara.nodeSize;
-  const info = makeRevisionInfo(pluginState);
+  // Coalesce with adjacent same-author pPrDel so a run of Backspaces shows
+  // as one tracked change.
+  const info =
+    findAdjacentParagraphMark(state.doc, prevParaStart, 'pPrDel', pluginState.author) ??
+    makeRevisionInfo(pluginState);
   const tr = state.tr.setNodeMarkup(prevParaStart, undefined, {
     ...prevPara.attrs,
     pPrDel: info,
@@ -418,7 +456,10 @@ function handleSuggestionDeleteAtEnd(
 
   if (!dispatch) return true;
 
-  const info = makeRevisionInfo(pluginState);
+  // Coalesce with adjacent same-author pPrDel.
+  const info =
+    findAdjacentParagraphMark(state.doc, paraStart, 'pPrDel', pluginState.author) ??
+    makeRevisionInfo(pluginState);
   const tr = state.tr.setNodeMarkup(paraStart, undefined, {
     ...para.attrs,
     pPrDel: info,

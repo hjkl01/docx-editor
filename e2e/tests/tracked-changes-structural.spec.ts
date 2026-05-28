@@ -366,6 +366,55 @@ test.describe('Tracked paragraph-mark revisions (issue #614)', () => {
     expect(await trDel.getAttribute('data-revision-author')).toBe('Jane');
   });
 
+  test('Consecutive Enters by the same author coalesce into one revision', async ({ page }) => {
+    // Word groups a run of tracked paragraph-mark insertions by the same
+    // author into one change. The sidebar should show ONE card for three
+    // Enters and one Accept should resolve all three.
+    await editor.typeText('first');
+    expect(await setSuggestionMode(page, true, 'Jane')).toBe(true);
+    await editor.pressEnter();
+    await editor.typeText('second');
+    await editor.pressEnter();
+    await editor.typeText('third');
+    await editor.pressEnter();
+
+    const ids = await page.evaluate(() => {
+      const w = window as unknown as {
+        __DOCX_EDITOR_E2E__?: {
+          getParagraphAttrs?: (i: number) => Record<string, unknown> | null;
+        };
+      };
+      const collected: number[] = [];
+      for (let i = 0; i < 4; i += 1) {
+        const attrs = w.__DOCX_EDITOR_E2E__?.getParagraphAttrs?.(i);
+        const ins = attrs?.pPrIns as { revisionId: number } | null | undefined;
+        if (ins) collected.push(ins.revisionId);
+      }
+      return collected;
+    });
+
+    expect(ids.length).toBeGreaterThanOrEqual(3);
+    // All three pPrIns markers share the same revisionId.
+    expect(new Set(ids).size).toBe(1);
+
+    // One Accept removes the marker from every coalesced paragraph.
+    expect(await acceptById(page, ids[0])).toBe(true);
+    const after = await page.evaluate(() => {
+      const w = window as unknown as {
+        __DOCX_EDITOR_E2E__?: {
+          getParagraphAttrs?: (i: number) => Record<string, unknown> | null;
+        };
+      };
+      const remaining: unknown[] = [];
+      for (let i = 0; i < 4; i += 1) {
+        const attrs = w.__DOCX_EDITOR_E2E__?.getParagraphAttrs?.(i);
+        if (attrs?.pPrIns) remaining.push(attrs.pPrIns);
+      }
+      return remaining;
+    });
+    expect(after).toEqual([]);
+  });
+
   test('acceptAllChanges resolves inline + paragraph-mark + table-row revisions in one call', async ({
     page,
   }) => {
