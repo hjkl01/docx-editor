@@ -42,13 +42,29 @@ export function TrackedChangeCard({
   // sharing the id in one pass — correct for all entry types.
   const handleAccept = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (onAcceptById) onAcceptById(change.revisionId);
-    else onAccept?.(change.from, change.to);
+    if (onAcceptById) {
+      onAcceptById(change.revisionId);
+      // A 'replacement' entry collapses an adjacent deletion + insertion
+      // into one card. The two halves carry distinct `w:id` values
+      // (sharing would trip the OOXML move-pair serializer), so we need
+      // to dispatch both to clear every site in one click.
+      if (change.type === 'replacement' && change.insertionRevisionId != null) {
+        onAcceptById(change.insertionRevisionId);
+      }
+    } else {
+      onAccept?.(change.from, change.to);
+    }
   };
   const handleReject = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (onRejectById) onRejectById(change.revisionId);
-    else onReject?.(change.from, change.to);
+    if (onRejectById) {
+      onRejectById(change.revisionId);
+      if (change.type === 'replacement' && change.insertionRevisionId != null) {
+        onRejectById(change.insertionRevisionId);
+      }
+    } else {
+      onReject?.(change.from, change.to);
+    }
   };
 
   return (

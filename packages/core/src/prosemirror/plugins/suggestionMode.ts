@@ -42,11 +42,11 @@ interface MarkAttrs {
   date: string;
 }
 
-function makeMarkAttrs(pluginState: SuggestionModeState): MarkAttrs {
+function makeMarkAttrs(pluginState: SuggestionModeState, date?: string): MarkAttrs {
   return {
     revisionId: mintRevisionId(),
     author: pluginState.author,
-    date: new Date().toISOString(),
+    date: date ?? new Date().toISOString(),
   };
 }
 
@@ -214,11 +214,12 @@ function markRangeAsDeleted(
   insertionType: MarkType,
   deletionType: MarkType,
   pluginState: SuggestionModeState,
-  /** When the caller is a replace op, pass the insertion attrs already
-   * minted so the deletion shares the same revision triple. Word treats
-   * a replace as one conceptual change; sharing the id collapses both
-   * sides into a single sidebar card and one Accept clears both. */
-  shareAttrs?: MarkAttrs
+  /** When the caller is a replace op, pass the insertion's date so the
+   * deletion shares the (author, date) triple — that's what the sidebar
+   * uses to detect replace pairs and fold them into one 'replacement'
+   * card. The `w:id` stays distinct so we don't trip the OOXML move-pair
+   * serializer (fromProseDoc/paragraph.ts:340). */
+  shareDate?: string
 ): void {
   const ranges: { from: number; to: number; isOwnInsert: boolean }[] = [];
 
@@ -236,9 +237,8 @@ function markRangeAsDeleted(
   if (ranges.length === 0) return;
 
   const delAttrs =
-    shareAttrs ??
     findAdjacentRevisionForRange(doc, from, to, 'deletion', pluginState.author) ??
-    makeMarkAttrs(pluginState);
+    makeMarkAttrs(pluginState, shareDate);
 
   for (let i = ranges.length - 1; i >= 0; i--) {
     const range = ranges[i];
@@ -273,8 +273,11 @@ function applySuggestionInsert(
   if (from !== to) {
     const deletionType = view.state.schema.marks.deletion;
     if (deletionType) {
-      // Replace op: share the insertion's revision triple with the
-      // deletion so both halves group as one tracked change.
+      // Replace op: pass the insertion's date down so the deletion shares
+      // the (author, date) triple — that's what extractTrackedChanges
+      // uses to detect adjacent del+ins and fold them into one
+      // 'replacement' card. The `w:id` stays distinct so we don't trip
+      // the OOXML move-pair serializer (fromProseDoc/paragraph.ts:340).
       markRangeAsDeleted(
         tr,
         view.state.doc,
@@ -283,7 +286,7 @@ function applySuggestionInsert(
         insertionType,
         deletionType,
         pluginState,
-        insertAttrs
+        insertAttrs.date
       );
     }
   }

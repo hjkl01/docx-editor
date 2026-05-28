@@ -510,7 +510,7 @@ const {
   pagesContainer: pagesRef,
   readOnly,
   externalPlugins: props.externalPlugins,
-  syncCoordinator,
+  syncCoordinator, editorMode,
   onChange: (doc) => {
     emit('change', doc);
     emit('update:document', doc);

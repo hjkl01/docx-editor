@@ -372,10 +372,21 @@ export function extractTrackedChanges(state: EditorState | null): TrackedChanges
   // the inline entry already represents the whole conceptual edit — hide
   // the structural sibling so the sidebar shows ONE card per change. The
   // shared `revisionId` means one Accept still clears both sites.
+  // A replacement entry carries BOTH the deletion's `revisionId` and the
+  // insertion's `insertionRevisionId` (separate ids — sharing would trip
+  // the OOXML move-pair serializer). The insertion id is the one shared
+  // with adjacent pPrIns attrs (via the suggesting-mode adjacency
+  // coalesce). Register both ids so the dedup catches pPrIns sites that
+  // belong to the same conceptual change.
   const inlineKeys = new Set<string>();
   for (const e of final) {
-    if (e.type === 'insertion' || e.type === 'deletion' || e.type === 'replacement') {
+    if (e.type === 'insertion' || e.type === 'deletion') {
       inlineKeys.add(`${e.revisionId}|${e.author}|${e.date ?? ''}`);
+    } else if (e.type === 'replacement') {
+      inlineKeys.add(`${e.revisionId}|${e.author}|${e.date ?? ''}`);
+      if (e.insertionRevisionId != null) {
+        inlineKeys.add(`${e.insertionRevisionId}|${e.author}|${e.date ?? ''}`);
+      }
     }
   }
   const deduped = final.filter((e) => {

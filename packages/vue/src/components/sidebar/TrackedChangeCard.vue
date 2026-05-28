@@ -102,8 +102,6 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'click'): void;
-  (e: 'accept', from: number, to: number): void;
-  (e: 'reject', from: number, to: number): void;
   (e: 'accept-by-id', revisionId: number): void;
   (e: 'reject-by-id', revisionId: number): void;
   (e: 'reply', revisionId: number, text: string): void;
@@ -119,10 +117,19 @@ const authorName = computed(() => props.change.author || t('trackedChanges.unkno
 // sharing the id in one pass — correct for all entry types.
 function onAccept() {
   emit('accept-by-id', props.change.revisionId);
+  // 'replacement' carries distinct ids for the deletion vs the insertion
+  // (sharing would trip the OOXML move-pair serializer); dispatch both
+  // so one click clears every site of the conceptual change.
+  if (props.change.type === 'replacement' && props.change.insertionRevisionId != null) {
+    emit('accept-by-id', props.change.insertionRevisionId);
+  }
 }
 
 function onReject() {
   emit('reject-by-id', props.change.revisionId);
+  if (props.change.type === 'replacement' && props.change.insertionRevisionId != null) {
+    emit('reject-by-id', props.change.insertionRevisionId);
+  }
 }
 </script>
 
