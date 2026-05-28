@@ -1095,6 +1095,8 @@ export interface Paragraph {
     formatting?: ParagraphFormatting;
     listRendering?: ListRendering;
     paraId?: string;
+    pPrDel?: TrackedChangeInfo;
+    pPrIns?: TrackedChangeInfo;
     propertyChanges?: ParagraphPropertyChange[];
     renderedPageBreakBefore?: boolean;
     sectionProperties?: SectionProperties;

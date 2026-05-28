@@ -178,6 +178,16 @@ export interface ParagraphAttrs {
     pageBreakBefore?: boolean;
     // (undocumented)
     paraId?: string;
+    pPrDel?: {
+        revisionId: number;
+        author: string;
+        date: string | null;
+    } | null;
+    pPrIns?: {
+        revisionId: number;
+        author: string;
+        date: string | null;
+    } | null;
     renderedPageBreakBefore?: boolean;
     // (undocumented)
     sectionBreakType?: 'nextPage' | 'continuous' | 'oddPage' | 'evenPage';

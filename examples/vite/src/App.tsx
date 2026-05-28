@@ -1,5 +1,10 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { createEmptyDocument, findStartPosForParaId } from '@eigenpal/docx-editor-core';
+import { setSuggestionMode } from '@eigenpal/docx-editor-core/prosemirror/plugins';
+import {
+  acceptChangeById,
+  rejectChangeById,
+} from '@eigenpal/docx-editor-core/prosemirror/commands';
 import { DocxEditor, type DocxEditorRef } from '@eigenpal/docx-editor-react';
 import {
   AgentChatLog,
@@ -248,11 +253,50 @@ export function App() {
       agentGetPageContent: (pageNumber: number) =>
         editorRef.current?.getPageContent(pageNumber) ?? null,
       agentGetDocumentText: () => extractDocumentText(editorRef.current?.getDocument()),
+      // Tracked structural revisions (#614). Drive the suggesting-mode plugin
+      // and the new id-based accept/reject commands directly against the
+      // active PM view, so tests don't depend on React mode-prop wiring.
+      setSuggestionMode: (active: boolean, authorOverride?: string) => {
+        const view = editorRef.current?.getEditorRef()?.getView?.();
+        if (!view) return false;
+        setSuggestionMode(active, view.state, view.dispatch, authorOverride ?? randomAuthor);
+        return true;
+      },
+      getParagraphRevisionAt: (index: number) => {
+        const view = editorRef.current?.getEditorRef()?.getView?.();
+        if (!view) return null;
+        let count = 0;
+        let out: { pPrIns: unknown; pPrDel: unknown } | null = null;
+        view.state.doc.descendants((node) => {
+          if (out != null) return false;
+          if (node.type.name !== 'paragraph') return true;
+          if (count === index) {
+            out = {
+              pPrIns: (node.attrs as Record<string, unknown>).pPrIns ?? null,
+              pPrDel: (node.attrs as Record<string, unknown>).pPrDel ?? null,
+            };
+            return false;
+          }
+          count += 1;
+          return true;
+        });
+        return out;
+      },
+      acceptChangeById: (revisionId: number) => {
+        const view = editorRef.current?.getEditorRef()?.getView?.();
+        if (!view) return false;
+        return acceptChangeById(revisionId)(view.state, view.dispatch);
+      },
+      rejectChangeById: (revisionId: number) => {
+        const view = editorRef.current?.getEditorRef()?.getView?.();
+        if (!view) return false;
+        return rejectChangeById(revisionId)(view.state, view.dispatch);
+      },
     };
     return () => {
       delete window.__DOCX_EDITOR_E2E__;
     };
-  }, [isE2E]);
+  }, [isE2E, randomAuthor]);
 
   useEffect(() => {
     // Under E2E with ?empty=1, boot empty so tests get a deterministic,

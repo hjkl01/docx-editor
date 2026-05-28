@@ -130,6 +130,8 @@ export {
   removeCommentMark,
   acceptChange,
   rejectChange,
+  acceptChangeById,
+  rejectChangeById,
   acceptAllChanges,
   rejectAllChanges,
   findNextChange,

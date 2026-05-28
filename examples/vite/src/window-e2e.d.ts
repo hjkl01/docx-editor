@@ -67,6 +67,14 @@ declare global {
         paragraphs: Array<{ paraId: string; text: string; styleId?: string }>;
       } | null;
       agentGetDocumentText: () => string;
+      // Tracked structural revisions (#614).
+      setSuggestionMode: (active: boolean, authorOverride?: string) => boolean;
+      getParagraphRevisionAt: (index: number) => {
+        pPrIns: { revisionId: number; author: string; date: string | null } | null;
+        pPrDel: { revisionId: number; author: string; date: string | null } | null;
+      } | null;
+      acceptChangeById: (revisionId: number) => boolean;
+      rejectChangeById: (revisionId: number) => boolean;
     };
   }
 }

@@ -818,5 +818,22 @@
     "deleteImage": "Usuń obraz",
     "imageProperties": "Właściwości obrazu",
     "rotate": "Obróć"
+  },
+  "revisions": {
+    "cellDeleted": null,
+    "cellInserted": null,
+    "cellMerged": null,
+    "cellPropertiesChanged": null,
+    "paragraphMarkDeleted": null,
+    "paragraphMarkInserted": null,
+    "paragraphMarkPropertiesChanged": null,
+    "paragraphPropertiesChanged": null,
+    "rowDeleted": null,
+    "rowInserted": null,
+    "rowPropertiesChanged": null,
+    "runPropertiesChanged": null,
+    "sectionPropertiesChanged": null,
+    "tableGridChanged": null,
+    "tablePropertiesChanged": null
   }
 }
