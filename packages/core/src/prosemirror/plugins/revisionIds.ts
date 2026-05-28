@@ -18,8 +18,12 @@
  * uniqueness even when callers interleave across plugins, commands, and
  * test harnesses.
  *
- * @internal
+ * Re-exported as `@public` through `prosemirror/plugins/index.ts` so
+ * adapter integrations (image insertion, custom commands) can mint
+ * revision triples without reaching into the implementation directly.
+ *
  * @packageDocumentation
+ * @public
  */
 
 import type { EditorState } from 'prosemirror-state';

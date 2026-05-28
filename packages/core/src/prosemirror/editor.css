@@ -743,14 +743,35 @@
   color: #c62828;
 }
 
-/* Tracked row — colored left border + faint background tint */
+/* Tracked row — colored left margin bar. Hidden ProseMirror table uses
+   normal block flow so we paint on the per-cell child (one bar per row).
+   The painted layout uses absolutely-positioned cells inside a relative
+   `.layout-table-row`, so a single ::before pseudo on the row draws one
+   continuous bar on the left edge — much cleaner than stamping a bar on
+   every cell child. */
 .ep-revision-row {
   position: relative;
 }
-.ep-revision-row.ep-revision-ins > * {
+.layout-table-row.ep-revision-row::before {
+  content: '';
+  position: absolute;
+  left: -4px;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  pointer-events: none;
+}
+.layout-table-row.ep-revision-row.ep-revision-ins::before {
+  background-color: #2e7d32;
+}
+.layout-table-row.ep-revision-row.ep-revision-del::before {
+  background-color: #c62828;
+}
+/* Hidden PM DOM path — kept for the off-screen editing surface. */
+.ep-revision-row:not(.layout-table-row).ep-revision-ins > * {
   box-shadow: inset 3px 0 0 #2e7d32;
 }
-.ep-revision-row.ep-revision-del > * {
+.ep-revision-row:not(.layout-table-row).ep-revision-del > * {
   box-shadow: inset 3px 0 0 #c62828;
   text-decoration: line-through;
   text-decoration-color: rgba(198, 40, 40, 0.6);

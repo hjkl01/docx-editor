@@ -43,6 +43,18 @@ export interface RevisionInfo {
 }
 
 /**
+ * Tracked-cell marker — the OOXML `<w:cellIns>` / `<w:cellDel>` /
+ * `<w:cellMerge>` shape attached to a `TableCell` PM node and surfaced
+ * to the layout model and painter for visual rendering.
+ *
+ * `kind` matches the OOXML element name (ins / del / merge).
+ */
+export interface CellMarker {
+  kind: 'ins' | 'del' | 'merge';
+  info: RevisionInfo;
+}
+
+/**
  * Generic tracked property-change wrapper metadata (w:*PrChange)
  */
 export interface PropertyChangeInfo extends TrackedChangeInfo {

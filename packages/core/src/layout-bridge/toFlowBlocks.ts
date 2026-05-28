@@ -397,10 +397,7 @@ function convertTableCell(
   // Surface tracked-cell marker (cellIns / cellDel / cellMerge) so the
   // painter can color the cell border. Same model as ParagraphAttrs.pPrIns.
   const cellMarker = attrs.cellMarker as
-    | {
-        kind: 'ins' | 'del' | 'merge';
-        info: import('../types/content/trackedChange').RevisionInfo;
-      }
+    | import('../types/content/trackedChange').CellMarker
     | null
     | undefined;
 

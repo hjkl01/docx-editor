@@ -394,10 +394,7 @@ export type TableCell = {
    */
   noWrap?: boolean;
   /** Tracked cell marker (`<w:cellIns>` / `<w:cellDel>` / `<w:cellMerge>`) — painter colors the top border. */
-  trackedMarker?: {
-    kind: 'ins' | 'del' | 'merge';
-    info: import('../types/content/trackedChange').RevisionInfo;
-  };
+  trackedMarker?: import('../types/content/trackedChange').CellMarker;
 };
 
 /**

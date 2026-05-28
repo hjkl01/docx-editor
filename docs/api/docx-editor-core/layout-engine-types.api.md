@@ -531,10 +531,7 @@ export type TableCell = {
         left: number;
     };
     noWrap?: boolean;
-    trackedMarker?: {
-        kind: 'ins' | 'del' | 'merge';
-        info: RevisionInfo;
-    };
+    trackedMarker?: CellMarker;
 };
 
 // @public

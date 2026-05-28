@@ -79,6 +79,7 @@ declare global {
       rejectAllChanges: () => boolean;
       getParagraphAttrs: (index: number) => Record<string, unknown> | null;
       plantParagraphPropertyChange: (revisionId: number, prior: unknown) => boolean;
+      insertTable: (rows: number, cols: number) => boolean;
       plantSimpleTable: () => boolean;
       plantTableRowInsertion: (revisionId: number) => boolean;
       getFirstTableRowAttrs: () => Record<string, unknown> | null;

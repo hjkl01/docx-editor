@@ -30,6 +30,24 @@ import {
 import { emuToPixels } from '../utils/units';
 import { renderParagraphFragment } from './renderParagraph';
 import { measureParagraph, type FloatingImageZone } from '../layout-bridge/measuring';
+import type { RevisionInfo } from '../types/content/trackedChange';
+
+/**
+ * Apply tracked-change classes + data attrs to a painted row/cell. The
+ * sidebar reads `data-revision-id` / `data-revision-author` to anchor
+ * cards; the CSS in `prosemirror/editor.css` keys on the two classes.
+ */
+function applyRevisionAttrs(
+  el: HTMLElement,
+  scope: 'row' | 'cell',
+  kind: 'ins' | 'del' | 'merge',
+  info: RevisionInfo
+): void {
+  el.classList.add(`ep-revision-${scope}`, `ep-revision-${kind}`);
+  el.dataset.revisionId = String(info.revisionId);
+  el.dataset.revisionAuthor = info.author;
+  if (info.date) el.dataset.revisionDate = info.date;
+}
 
 /**
  * CSS class names for table elements
@@ -448,23 +466,18 @@ function renderTableCell(
     isLastCol: boolean;
   },
   context: RenderContext,
-  doc: Document
+  doc: Document,
+  /** Row-level tracked revision id (if any). When the cell's tracked
+   * marker shares this id, the row visual already covers it — suppress
+   * the per-cell border / background to avoid stacking 2-3 green visuals
+   * on the same cell. */
+  parentRowRevisionId?: number
 ): HTMLElement {
   const cellEl = doc.createElement('div');
   cellEl.className = TABLE_CLASS_NAMES.cell;
 
-  // Tracked-cell marker — apply ep-revision-cell + kind class so the
-  // shared CSS (editor.css `.ep-revision-cell.ep-revision-ins`) renders
-  // a colored top border. data-revision-id lets the sidebar anchor cards
-  // to the painted node.
-  if (cell.trackedMarker) {
-    cellEl.classList.add('ep-revision-cell');
-    cellEl.classList.add(`ep-revision-${cell.trackedMarker.kind}`);
-    cellEl.dataset.revisionId = String(cell.trackedMarker.info.revisionId);
-    cellEl.dataset.revisionAuthor = cell.trackedMarker.info.author;
-    if (cell.trackedMarker.info.date) {
-      cellEl.dataset.revisionDate = cell.trackedMarker.info.date;
-    }
+  if (cell.trackedMarker && cell.trackedMarker.info.revisionId !== parentRowRevisionId) {
+    applyRevisionAttrs(cellEl, 'cell', cell.trackedMarker.kind, cell.trackedMarker.info);
   }
 
   // Positioning
@@ -581,16 +594,13 @@ function renderTableRow(
   const rowEl = doc.createElement('div');
   rowEl.className = TABLE_CLASS_NAMES.row;
 
-  // Tracked-row marker — same shape as the cell branch: ep-revision-row
-  // + kind class + data-revision-id so the painted row carries the green
-  // change bar (CSS in editor.css) and the sidebar can anchor to it.
-  const trackedRev = row.trackedIns ?? row.trackedDel;
-  if (trackedRev) {
-    rowEl.classList.add('ep-revision-row');
-    rowEl.classList.add(`ep-revision-${row.trackedIns ? 'ins' : 'del'}`);
-    rowEl.dataset.revisionId = String(trackedRev.revisionId);
-    rowEl.dataset.revisionAuthor = trackedRev.author;
-    if (trackedRev.date) rowEl.dataset.revisionDate = trackedRev.date;
+  // Tracked-row marker (sidebar reads the same data attrs as cells).
+  // Prefer `del` when both flags are present (rare; "ins of a row that
+  // was later marked deleted" — the deletion is the more recent action).
+  if (row.trackedDel) {
+    applyRevisionAttrs(rowEl, 'row', 'del', row.trackedDel);
+  } else if (row.trackedIns) {
+    applyRevisionAttrs(rowEl, 'row', 'ins', row.trackedIns);
   }
 
   // Positioning
@@ -662,7 +672,8 @@ function renderTableRow(
       cellHeight,
       { isFirstRow, isLastRow, isFirstCol, isLastCol },
       context,
-      doc
+      doc,
+      row.trackedIns?.revisionId ?? row.trackedDel?.revisionId
     );
     cellEl.dataset.cellIndex = String(cellIndex);
     cellEl.dataset.columnIndex = String(columnIndex);

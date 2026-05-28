@@ -177,6 +177,9 @@ export const increaseListLevel: Command;
 export function insertHyperlink(text: string, href: string, tooltip?: string): Command;
 
 // @public
+export function insertImageNode(state: EditorState, dispatch: ((tr: Transaction) => void) | undefined, imageNode: Node_2, pos: number): boolean;
+
+// @public
 export const insertPageBreak: Command;
 
 // @public (undocumented)

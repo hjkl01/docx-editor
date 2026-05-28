@@ -8,6 +8,7 @@ import {
   rejectAllChanges,
   addRowBelow,
   deleteRow,
+  insertTable,
 } from '@eigenpal/docx-editor-core/prosemirror/commands';
 import { DocxEditor, type DocxEditorRef } from '@eigenpal/docx-editor-react';
 import {
@@ -327,6 +328,13 @@ export function App() {
       },
       // Test-only: insert a 1x1 table at the cursor (replaces selection),
       // bypassing the toolbar. Used by the trIns spec.
+      // Calls the real insertTable command — exercises the suggesting-mode
+      // tracking path (trIns + cellMarker:ins) when used after setSuggestionMode.
+      insertTable: (rows: number, cols: number) => {
+        const view = editorRef.current?.getEditorRef()?.getView?.();
+        if (!view) return false;
+        return insertTable(rows, cols)(view.state, view.dispatch);
+      },
       plantSimpleTable: () => {
         const view = editorRef.current?.getEditorRef()?.getView?.();
         if (!view) return false;

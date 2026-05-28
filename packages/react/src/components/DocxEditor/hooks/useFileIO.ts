@@ -12,7 +12,7 @@ import {
   clearTrackedChanges,
 } from '@eigenpal/docx-editor-core/prosemirror/extensions';
 import { readDocxFileFromInput, type DocxInput } from '@eigenpal/docx-editor-core/utils';
-import { makeRevisionInfo } from '@eigenpal/docx-editor-core/prosemirror/plugins';
+import { insertImageNode } from '@eigenpal/docx-editor-core/prosemirror/commands';
 import type { EditorView } from 'prosemirror-view';
 import type { PagedEditorRef } from '../PagedEditor';
 
@@ -261,25 +261,10 @@ body { background: white; }
             displayMode: 'inline',
           });
 
-          const { from } = view.state.selection;
-          const tr = view.state.tr.insert(from, imageNode);
-          // Track the insertion in suggesting mode — wrap the inserted
-          // image node with an `insertion` mark so it round-trips as a
-          // tracked addition (Word's convention: <w:ins>{img run}</w:ins>).
-          const info = makeRevisionInfo(view.state);
-          const insertionType = view.state.schema.marks.insertion;
-          if (info && insertionType) {
-            tr.addMark(
-              from,
-              from + imageNode.nodeSize,
-              insertionType.create({
-                revisionId: info.revisionId,
-                author: info.author,
-                date: info.date,
-              })
-            );
-          }
-          view.dispatch(tr.scrollIntoView());
+          // Shared helper dispatches the insert + applies the `insertion`
+          // mark when suggesting mode is active (Vue + clipboard paste
+          // call the same path).
+          insertImageNode(view.state, view.dispatch, imageNode, view.state.selection.from);
           focusActiveEditor();
         };
         img.src = dataUrl;
