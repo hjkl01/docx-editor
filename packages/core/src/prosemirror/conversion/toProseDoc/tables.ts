@@ -666,9 +666,17 @@ function convertTableCell(
     } else if (sc.type === 'tableCellDeletion') {
       attrs.cellMarker = { kind: 'del', info };
     } else if (sc.type === 'tableCellMerge') {
-      // Default to vertical-restart; future commit reads vMerge/vMergeOrig
-      // off the source XML and threads through the model.
-      attrs.cellMarker = { kind: 'merge', info, vMerge: 'rest' };
+      // Preserve the source `w:vMerge` / `w:vMergeOrig` value when present
+      // (parser reads them off `<w:cellMerge>`). If missing (e.g. legacy
+      // model with no vMerge), default to `"cont"` — matches Word's most
+      // common tracked-merge case ("this cell got merged INTO the one
+      // above"), per ECMA-376 §17.13.5.6.
+      attrs.cellMarker = {
+        kind: 'merge',
+        info,
+        vMerge: sc.vMerge ?? 'cont',
+        ...(sc.vMergeOrig ? { vMergeOrig: sc.vMergeOrig } : {}),
+      };
     }
   }
   // Cell-property change history.

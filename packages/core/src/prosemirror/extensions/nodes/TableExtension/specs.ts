@@ -341,6 +341,23 @@ export const tableHeaderSpec: NodeSpec = {
     if (attrs.colspan > 1) domAttrs.colspan = String(attrs.colspan);
     if (attrs.rowspan > 1) domAttrs.rowspan = String(attrs.rowspan);
 
+    // Mirror the tableCellSpec revision cue so header cells also surface
+    // tracked-change attrs to the sidebar / painter.
+    if (attrs.cellMarker) {
+      const m = attrs.cellMarker;
+      const kindClass =
+        m.kind === 'ins'
+          ? 'ep-revision-ins'
+          : m.kind === 'del'
+            ? 'ep-revision-del'
+            : 'ep-revision-merge';
+      domAttrs.class = `${domAttrs.class} ep-revision-cell ${kindClass}`;
+      domAttrs['data-revision-id'] = String(m.info.revisionId);
+      domAttrs['data-revision-author'] = m.info.author;
+      if (m.info.date) domAttrs['data-revision-date'] = m.info.date;
+      if (m.kind === 'merge') domAttrs['data-vmerge'] = m.vMerge;
+    }
+
     const styles: string[] = ['font-weight: bold'];
     styles.push(...buildCellPaddingStyles(attrs));
 

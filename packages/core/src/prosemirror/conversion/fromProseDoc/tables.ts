@@ -427,7 +427,14 @@ function convertPMTableCell(node: PMNode, documentCounts?: TrackedChangeCounts):
     };
     if (m.kind === 'ins') cell.structuralChange = { type: 'tableCellInsertion', info };
     else if (m.kind === 'del') cell.structuralChange = { type: 'tableCellDeletion', info };
-    else cell.structuralChange = { type: 'tableCellMerge', info };
+    else {
+      cell.structuralChange = {
+        type: 'tableCellMerge',
+        info,
+        ...(m.vMerge ? { vMerge: m.vMerge } : {}),
+        ...(m.vMergeOrig ? { vMergeOrig: m.vMergeOrig } : {}),
+      };
+    }
   }
   if (attrs.tcPrChange && attrs.tcPrChange.length > 0) {
     cell.propertyChanges = attrs.tcPrChange;

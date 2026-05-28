@@ -174,15 +174,18 @@ export function extractTrackedChanges(state: EditorState | null): TrackedChanges
           del: 'cellDeleted' as const,
           merge: 'cellMerged' as const,
         };
-        raw.push({
-          type: kindToType[cellMarker.kind],
-          text: node.textContent || '',
-          author: cellMarker.info.author || '',
-          date: cellMarker.info.date ?? undefined,
-          from: pos,
-          to: pos + node.nodeSize,
-          revisionId: cellMarker.info.revisionId,
-        });
+        const resolvedType = kindToType[cellMarker.kind];
+        if (resolvedType) {
+          raw.push({
+            type: resolvedType,
+            text: node.textContent || '',
+            author: cellMarker.info.author || '',
+            date: cellMarker.info.date ?? undefined,
+            from: pos,
+            to: pos + node.nodeSize,
+            revisionId: cellMarker.info.revisionId,
+          });
+        }
       }
       const tcPrChange = node.attrs.tcPrChange as Array<{
         info: { id: number; author: string; date?: string };
@@ -250,13 +253,61 @@ export function extractTrackedChanges(state: EditorState | null): TrackedChanges
     }
   });
 
+  // Coalesce structural-revision entries that share a `(id, author, date)`
+  // triple across nested nodes. A row-insertion typically produces one
+  // `rowInserted` entry on the `<tr>` PLUS one `cellInserted` entry per
+  // cell, all sharing the triple. The spec says these should render as a
+  // single sidebar row (per `tracked-structural-tables/spec.md` "Sidebar
+  // groups co-revision-id entries as one"). Prefer the broader entry:
+  // priority is `table > row > cell > paragraph-mark`.
+  //
+  // Inline insertion/deletion entries are NOT coalesced here — the
+  // adjacent-merge pass below handles them.
+  const STRUCTURAL_PRIORITY: Record<string, number> = {
+    tablePropertiesChanged: 5,
+    rowInserted: 4,
+    rowDeleted: 4,
+    rowPropertiesChanged: 4,
+    cellInserted: 3,
+    cellDeleted: 3,
+    cellMerged: 3,
+    cellPropertiesChanged: 3,
+    paragraphMarkInsertion: 2,
+    paragraphMarkDeletion: 2,
+    paragraphPropertiesChanged: 2,
+  };
+  const isStructuralType = (t: TrackedChangeEntry['type']) => t in STRUCTURAL_PRIORITY;
+  const groupedByTriple = new Map<string, TrackedChangeEntry>();
+  const ordered: TrackedChangeEntry[] = [];
+  for (const entry of raw) {
+    if (!isStructuralType(entry.type)) {
+      ordered.push(entry);
+      continue;
+    }
+    const key = `${entry.revisionId}|${entry.author}|${entry.date ?? ''}`;
+    const existing = groupedByTriple.get(key);
+    if (!existing) {
+      groupedByTriple.set(key, entry);
+      ordered.push(entry);
+      continue;
+    }
+    // Keep the entry with HIGHER structural priority (broader scope wins).
+    if ((STRUCTURAL_PRIORITY[entry.type] ?? 0) > (STRUCTURAL_PRIORITY[existing.type] ?? 0)) {
+      // Replace in-place inside the ordered array.
+      const idx = ordered.indexOf(existing);
+      if (idx >= 0) ordered[idx] = entry;
+      groupedByTriple.set(key, entry);
+    }
+    // Otherwise drop the new entry — broader sibling already represents it.
+  }
+
   // Merge adjacent entries with the same revisionId and type into one.
   // Restricted to INLINE types (insertion / deletion) — paragraph-mark entries
   // use the whole-paragraph range, and two consecutive paragraphs sharing a
   // revision triple (legal in OOXML for a multi-paragraph insertion applied
   // under one id) must stay as distinct sidebar rows.
   const merged: TrackedChangeEntry[] = [];
-  for (const entry of raw) {
+  for (const entry of ordered) {
     const last = merged[merged.length - 1];
     const isInlineType = entry.type === 'insertion' || entry.type === 'deletion';
     if (

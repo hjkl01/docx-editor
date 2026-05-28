@@ -564,12 +564,13 @@ function resolveById(revisionId: number, mode: 'accept' | 'reject'): Command {
       }
     }
 
-    // Phase 2: table-cell markers (cellIns / cellDel / cellMerge). Resolved
-    // before rows so when a row is deleted, its cells' markers don't trail.
-    // Per OOXML, accept(cellIns) = clear; reject(cellIns) = delete cell;
-    // accept(cellDel) = delete cell; reject(cellDel) = clear; accept(merge)
-    // = apply merge (out-of-scope for round-trip-only — clear marker);
-    // reject(merge) = clear marker.
+    // Phase 2 (round-trip slice): table-cell + table-row markers are CLEARED
+    // on both accept and reject. The full Word semantic — accept(trDel) =
+    // delete row, reject(trIns) = delete row, etc. — needs surgical PM
+    // mutations that prosemirror-tables doesn't handle cleanly at this
+    // layer; lands with the suggesting-aware table commands (Phase 2b).
+    // Until then, clear-only is non-destructive and matches user intent for
+    // "I'm done with this revision marker."
     const sortedCells = [...tableCellSites].sort((a, b) => b.pos - a.pos);
     for (const site of sortedCells) {
       const mappedPos = tr.mapping.map(site.pos);

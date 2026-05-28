@@ -33,10 +33,15 @@ async function setSuggestionMode(
   active: boolean,
   author?: string
 ) {
-  return page.evaluate(({ a, u }) => window.__DOCX_EDITOR_E2E__?.setSuggestionMode(a, u) ?? false, {
-    a: active,
-    u: author,
-  });
+  const ok = await page.evaluate(
+    ({ a, u }) => window.__DOCX_EDITOR_E2E__?.setSuggestionMode(a, u) ?? false,
+    { a: active, u: author }
+  );
+  // Re-focus the editor: the meta dispatch can trigger a React re-render
+  // path that briefly loses contentEditable focus, which makes subsequent
+  // page.keyboard.press('Backspace') target the wrong element.
+  await page.locator('.ProseMirror').first().focus();
+  return ok;
 }
 
 async function acceptById(page: import('@playwright/test').Page, id: number) {
@@ -93,7 +98,7 @@ test.describe('Tracked paragraph-mark revisions (issue #614)', () => {
     expect(await setSuggestionMode(page, true, 'Jane')).toBe(true);
     await page.keyboard.press('Backspace');
     // Wait for React/PM to flush the Backspace transaction before reading attrs.
-    await page.waitForTimeout(50);
+    await page.waitForTimeout(150);
 
     // Paragraphs still split — the join is DEFERRED until accept.
     const first = await getParaRevision(page, 0);
@@ -166,7 +171,7 @@ test.describe('Tracked paragraph-mark revisions (issue #614)', () => {
     await page.keyboard.press('Backspace');
     // Wait for React to flush the Backspace transaction. Without this the
     // `getParaRevision` read can race against the dispatch and see stale attrs.
-    await page.waitForTimeout(50);
+    await page.waitForTimeout(150);
 
     const before = await getParaRevision(page, 0);
     expect(before?.pPrDel, 'Backspace must set pPrDel on previous paragraph').not.toBeNull();
@@ -188,7 +193,7 @@ test.describe('Tracked paragraph-mark revisions (issue #614)', () => {
 
     await setSuggestionMode(page, true, 'Jane');
     await page.keyboard.press('Backspace');
-    await page.waitForTimeout(50);
+    await page.waitForTimeout(150);
 
     const before = await getParaRevision(page, 0);
     expect(before?.pPrDel, 'Backspace must set pPrDel on previous paragraph').not.toBeNull();

@@ -698,10 +698,16 @@ export function serializeTableCellFormatting(
     } else if (structuralChange.type === 'tableCellMerge') {
       // CT_CellMergeTrackChange (wml.xsd:811) uses `w:vMerge`/`w:vMergeOrig`
       // (ST_AnnotationVMerge: "rest" | "cont"). It does NOT take `w:val`.
-      // The current model doesn't preserve vMerge per-cell, so default to
-      // "rest" — better-than-nothing semantics and schema-valid.
+      // Prefer the source value parsed by tableParser; default to "cont"
+      // (Word's most common tracked-merge case — "this cell got merged
+      // INTO the one above" per ECMA-376 §17.13.5.6). "rest" without an
+      // explicit anchor would reverse merge direction on round-trip.
+      const vMerge = structuralChange.vMerge ?? 'cont';
+      const vMergeOrigAttr = structuralChange.vMergeOrig
+        ? ` w:vMergeOrig="${structuralChange.vMergeOrig}"`
+        : '';
       parts.push(
-        `<w:cellMerge ${serializeTrackedChangeAttributes(structuralChange.info)} w:vMerge="rest"/>`
+        `<w:cellMerge ${serializeTrackedChangeAttributes(structuralChange.info)} w:vMerge="${vMerge}"${vMergeOrigAttr}/>`
       );
     }
   }

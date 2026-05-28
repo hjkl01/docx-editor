@@ -197,4 +197,14 @@ export interface TableStructuralChangeInfo {
     | 'tableCellMerge';
   /** Tracked change metadata */
   info: TrackedChangeInfo;
+  /**
+   * `<w:cellMerge w:vMerge="…">` value, only meaningful for `tableCellMerge`.
+   * Schema `ST_AnnotationVMerge`: `"rest"` = anchor (start of merged span),
+   * `"cont"` = continuation (merged into predecessor). Word's default for a
+   * tracked merge is `"cont"` (most edits track "this cell got merged INTO
+   * the one above"); we preserve the on-disk value when present.
+   */
+  vMerge?: 'rest' | 'cont';
+  /** `<w:cellMerge w:vMergeOrig="…">` — the pre-merge vMerge state. */
+  vMergeOrig?: 'rest' | 'cont';
 }
