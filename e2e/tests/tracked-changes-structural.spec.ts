@@ -226,6 +226,18 @@ test.describe('Tracked paragraph-mark revisions (issue #614)', () => {
     const revId = await insMark.getAttribute('data-revision-id');
     expect(revId).toMatch(/^\d+$/);
     expect(await insMark.getAttribute('data-revision-author')).toBe('Jane');
+
+    // The pilcrow glyph must sit INSIDE the last line element (inline with
+    // text), not as a sibling block after all the line divs. Otherwise it
+    // renders as its own row below the text and visually overlaps the next
+    // paragraph (regression check for the fragment-::after layout bug).
+    const glyph = insMark.locator('.layout-revision-pmark-glyph').first();
+    await expect(glyph).toBeVisible();
+    await expect(glyph).toHaveText('¶');
+    // Glyph's parent must be a .layout-line (the last line of the fragment),
+    // NOT the fragment itself.
+    const parentClass = await glyph.evaluate((el) => el.parentElement?.className ?? '');
+    expect(parentClass).toContain('layout-line');
   });
 
   test('acceptChangeById on an unknown revisionId is a no-op (returns false)', async ({ page }) => {

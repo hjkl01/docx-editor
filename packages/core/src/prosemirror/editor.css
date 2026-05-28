@@ -713,17 +713,20 @@
 .layout-revision-del.layout-revision-pmark::before {
   background-color: #c62828;
 }
-.layout-revision-pmark::after {
-  content: '¶';
+/* Pilcrow glyph — appended into the last line element by the painter so it
+   sits inline with the text instead of as a ::after pseudo on the fragment
+   (which would render as its own block row below the line). */
+.layout-revision-pmark-glyph {
   display: inline;
   margin-left: 2px;
   font-weight: normal;
   opacity: 0.75;
+  pointer-events: none;
 }
-.layout-revision-ins.layout-revision-pmark::after {
+.layout-revision-pmark-glyph.layout-revision-ins {
   color: #2e7d32;
 }
-.layout-revision-del.layout-revision-pmark::after {
+.layout-revision-pmark-glyph.layout-revision-del {
   color: #c62828;
   text-decoration: line-through;
 }

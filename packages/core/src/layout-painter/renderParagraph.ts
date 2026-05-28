@@ -495,6 +495,23 @@ export function renderParagraphFragment(
     fragmentEl.appendChild(lineEl);
   }
 
+  // Paragraph-mark pilcrow. Only the LAST fragment of the paragraph carries
+  // the glyph (the mark belongs to the terminating ¶). Append as an inline
+  // span inside the last line element so it sits on the same baseline as the
+  // text instead of pushing a new block-level row below the line.
+  if ((pPrIns || pPrDel) && !fragment.continuesOnNext) {
+    const lastLineEl = fragmentEl.lastElementChild as HTMLElement | null;
+    if (lastLineEl) {
+      const glyph = doc.createElement('span');
+      glyph.className = 'layout-revision-pmark-glyph';
+      if (pPrIns) glyph.classList.add('layout-revision-ins');
+      else glyph.classList.add('layout-revision-del');
+      glyph.textContent = '¶';
+      glyph.setAttribute('aria-hidden', 'true');
+      lastLineEl.appendChild(glyph);
+    }
+  }
+
   return fragmentEl;
 }
 
