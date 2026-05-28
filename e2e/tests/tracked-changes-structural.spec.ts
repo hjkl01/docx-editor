@@ -354,6 +354,45 @@ test.describe('Tracked paragraph-mark revisions (issue #614)', () => {
     expect(await trDel.getAttribute('data-revision-author')).toBe('Jane');
   });
 
+  test('acceptAllChanges resolves inline + paragraph-mark + table-row revisions in one call', async ({
+    page,
+  }) => {
+    // Mixed-revision scenario: inline insertion (typed text) + paragraph-mark
+    // insertion (Enter) + table-row insertion (planted). acceptAllChanges
+    // should clear all three by iterating the snapshotted id list.
+    expect(await setSuggestionMode(page, true, 'Jane')).toBe(true);
+    await editor.typeText('Hello');
+    await editor.pressEnter();
+    await editor.typeText('World');
+    await setSuggestionMode(page, false);
+
+    // Plant a table with a tracked-row insertion at the end.
+    await page.evaluate(() => window.__DOCX_EDITOR_E2E__?.plantSimpleTable?.());
+    expect(
+      await page.evaluate(() => window.__DOCX_EDITOR_E2E__?.plantTableRowInsertion?.(999))
+    ).toBe(true);
+
+    // Inline insertion mark, paragraph-mark revision, and row revision all
+    // present before acceptAll.
+    expect(await page.locator('.docx-insertion').count()).toBeGreaterThan(0);
+    expect((await getParaRevision(page, 0))?.pPrIns).toBeTruthy();
+    expect(await page.locator('tr[data-revision-id]').count()).toBeGreaterThan(0);
+
+    const accepted = await page.evaluate(
+      () => window.__DOCX_EDITOR_E2E__?.acceptAllChanges?.() ?? false
+    );
+    expect(accepted).toBe(true);
+
+    // All tracking is gone after acceptAll.
+    await page.waitForTimeout(50);
+    expect(await page.locator('.docx-insertion').count()).toBe(0);
+    expect(await page.locator('tr[data-revision-id]').count()).toBe(0);
+    const para0 = await getParaRevision(page, 0);
+    const para1 = await getParaRevision(page, 1);
+    expect(para0?.pPrIns).toBeNull();
+    expect(para1?.pPrIns).toBeNull();
+  });
+
   test('Sidebar surfaces a paragraph-mark revision card with accept/reject', async ({ page }) => {
     await editor.typeText('Hello world');
     await editor.selectRange(0, 0, 5);

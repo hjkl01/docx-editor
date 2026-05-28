@@ -4,6 +4,8 @@ import { setSuggestionMode } from '@eigenpal/docx-editor-core/prosemirror/plugin
 import {
   acceptChangeById,
   rejectChangeById,
+  acceptAllChanges,
+  rejectAllChanges,
   addRowBelow,
   deleteRow,
 } from '@eigenpal/docx-editor-core/prosemirror/commands';
@@ -293,6 +295,16 @@ export function App() {
         const view = editorRef.current?.getEditorRef()?.getView?.();
         if (!view) return false;
         return rejectChangeById(revisionId)(view.state, view.dispatch);
+      },
+      acceptAllChanges: () => {
+        const view = editorRef.current?.getEditorRef()?.getView?.();
+        if (!view) return false;
+        return acceptAllChanges()(view.state, view.dispatch);
+      },
+      rejectAllChanges: () => {
+        const view = editorRef.current?.getEditorRef()?.getView?.();
+        if (!view) return false;
+        return rejectAllChanges()(view.state, view.dispatch);
       },
       // Test-only: read full attrs of the Nth paragraph, including new
       // revision attrs (pPrIns/pPrDel/pPrChange).

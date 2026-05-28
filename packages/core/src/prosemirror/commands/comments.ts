@@ -191,27 +191,18 @@ export function acceptAllChanges(): Command {
     const ids = collectAllRevisionIds(state);
     if (ids.length === 0) return false;
     if (!dispatch) return true;
-    // Dispatch each `resolveById` sequentially against the LATEST view
-    // state. Each call dispatches its own transaction (one undo step per
-    // revision), so we re-read the current state between calls. This
-    // matches Word's UX where "Accept all" undoes one-by-one but is more
-    // ergonomic for the user than a single mega-transaction that's hard
-    // to inspect.
-    //
-    // resolveById may join/remove rows or tables, so we re-collect ids
-    // would be over-eager — instead we keep our snapshot list and let
-    // any already-resolved id no-op (returns false).
-    const view = dispatch as unknown as { state?: EditorState };
-    let lastState: EditorState = view.state ?? state;
-    let acceptedCount = 0;
-    const capturingDispatch = (tr: import('prosemirror-state').Transaction) => {
+    // Dispatch each `resolveById` sequentially against the LATEST state
+    // after the previous resolution applied. Each call produces its own
+    // transaction (one undo step per revision id), matching Word's UX
+    // where each accept is individually undoable.
+    let lastState: EditorState = state;
+    const capturingDispatch = (tr: Transaction) => {
       dispatch(tr);
       lastState = lastState.apply(tr);
     };
     for (const id of ids) {
-      if (resolveById(id, 'accept')(lastState, capturingDispatch)) acceptedCount += 1;
+      resolveById(id, 'accept')(lastState, capturingDispatch);
     }
-    void acceptedCount;
     return true;
   };
 }
@@ -224,9 +215,8 @@ export function rejectAllChanges(): Command {
     const ids = collectAllRevisionIds(state);
     if (ids.length === 0) return false;
     if (!dispatch) return true;
-    const view = dispatch as unknown as { state?: EditorState };
-    let lastState: EditorState = view.state ?? state;
-    const capturingDispatch = (tr: import('prosemirror-state').Transaction) => {
+    let lastState: EditorState = state;
+    const capturingDispatch = (tr: Transaction) => {
       dispatch(tr);
       lastState = lastState.apply(tr);
     };
@@ -729,8 +719,22 @@ function resolveById(revisionId: number, mode: 'accept' | 'reject'): Command {
         if (parentTable?.type.name === 'table' && parentTable.childCount > 1) {
           tr.delete(mappedPos, mappedPos + live.nodeSize);
         } else if (parentTable?.type.name === 'table') {
-          // Single-row table — remove the whole table.
-          tr.delete(parentTableStart, parentTableStart + parentTable.nodeSize);
+          // Single-row table — remove the whole table. If the table is the
+          // only child of its parent (e.g., the only block in the doc),
+          // replace with an empty paragraph so the parent's `+` content
+          // constraint stays satisfied. Otherwise the apply would throw.
+          const $table = tr.doc.resolve(parentTableStart);
+          const isOnlyChild = $table.parent.childCount === 1;
+          if (isOnlyChild) {
+            const paraType = tr.doc.type.schema.nodes.paragraph;
+            tr.replaceWith(
+              parentTableStart,
+              parentTableStart + parentTable.nodeSize,
+              paraType.create()
+            );
+          } else {
+            tr.delete(parentTableStart, parentTableStart + parentTable.nodeSize);
+          }
         } else {
           // Defensive: parent isn't a table (shouldn't happen). Fall back
           // to clearing the marker.
@@ -746,9 +750,6 @@ function resolveById(revisionId: number, mode: 'accept' | 'reject'): Command {
         tr.setNodeMarkup(mappedPos, undefined, newAttrs);
       }
     }
-    // Suppress unused-arg warning for `mode` in the cell/row branches (the
-    // semantic differences land with suggesting-mode commands).
-    void mode;
 
     if (tr.steps.length === 0) return false;
     dispatch(tr);

@@ -73,6 +73,8 @@ import { setSuggestionMode } from '@eigenpal/docx-editor-core/prosemirror/plugin
 import {
   acceptChangeById,
   rejectChangeById,
+  acceptAllChanges,
+  rejectAllChanges,
   addRowBelow,
   deleteRow,
 } from '@eigenpal/docx-editor-core/prosemirror/commands';
@@ -344,6 +346,16 @@ onMounted(async () => {
         const view = (editorRef.value?.getEditorRef() as any)?.getView?.();
         if (!view) return false;
         return rejectChangeById(revisionId)(view.state, view.dispatch);
+      },
+      acceptAllChanges: () => {
+        const view = (editorRef.value?.getEditorRef() as any)?.getView?.();
+        if (!view) return false;
+        return acceptAllChanges()(view.state, view.dispatch);
+      },
+      rejectAllChanges: () => {
+        const view = (editorRef.value?.getEditorRef() as any)?.getView?.();
+        if (!view) return false;
+        return rejectAllChanges()(view.state, view.dispatch);
       },
       getParagraphAttrs: (index: number) => {
         const view = (editorRef.value?.getEditorRef() as any)?.getView?.();

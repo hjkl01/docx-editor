@@ -22,6 +22,9 @@ import type { EditorView } from 'prosemirror-view';
 import type { Node as PMNode, MarkType } from 'prosemirror-model';
 
 import { mintRevisionId } from './revisionIds';
+import { applyPostSplitInheritance } from '../extensions/features/BaseKeymapExtension';
+
+const STYLE_MARK_NAMES = new Set(['fontFamily', 'fontSize', 'textColor']);
 
 export const suggestionModeKey = new PluginKey<SuggestionModeState>('suggestionMode');
 const SUGGESTION_META = 'suggestionModeApplied';
@@ -290,6 +293,13 @@ function handleSuggestionEnter(
   const deletionType = state.schema.marks.deletion;
   if (!insertionType || !deletionType) return false;
 
+  // Capture source paragraph + active style marks BEFORE any tr work so
+  // `applyPostSplitInheritance` can match `splitBlockClearBorders` behavior:
+  // typed text after the split inherits font / size / color via setStoredMarks.
+  const sourcePara = $from.parent;
+  const preMarks = state.storedMarks ?? $from.marks();
+  const styleMarks = preMarks.filter((m) => STYLE_MARK_NAMES.has(m.type.name));
+
   const tr = state.tr;
   tr.setMeta(SUGGESTION_META, true);
 
@@ -305,11 +315,10 @@ function handleSuggestionEnter(
   const $cursor = tr.selection.$from;
   const firstParaStart = $cursor.before($cursor.depth);
 
-  // Split the paragraph at the cursor. PM's `split` creates a copy of the
-  // current node type with default attrs (matches splitBlockClearBorders'
-  // path for typed.split-able blocks).
-  const splitPos = tr.selection.from;
-  tr.split(splitPos, 1);
+  // Split the paragraph at the cursor. After tr.split, the cursor (mapped)
+  // lands at the start of the NEW paragraph, which is what
+  // applyPostSplitInheritance expects.
+  tr.split(tr.selection.from, 1);
 
   // Set pPrIns on the FIRST paragraph (the one before the split).
   const firstPara = tr.doc.nodeAt(firstParaStart);
@@ -321,47 +330,10 @@ function handleSuggestionEnter(
     });
   }
 
-  // Inherit style attrs from the source paragraph onto the new paragraph
-  // (mirrors `splitBlockClearBorders` minimal behavior — full implementation
-  // is in BaseKeymapExtension, but we can't reuse it here without losing the
-  // single-transaction guarantee).
-  const newParaStart = tr.mapping.map(firstParaStart) + (firstPara?.nodeSize ?? 0);
-  const newPara = tr.doc.nodeAt(newParaStart);
-  if (newPara && newPara.type.name === 'paragraph' && firstPara) {
-    const newAttrs = { ...newPara.attrs };
-    const INHERITED: Array<keyof typeof newAttrs> = [
-      'styleId',
-      'lineSpacing',
-      'lineSpacingRule',
-      'spaceAfter',
-      'spaceBefore',
-      'contextualSpacing',
-      'defaultTextFormatting',
-    ];
-    let changed = false;
-    for (const key of INHERITED) {
-      const src = firstPara.attrs[key as string];
-      if (src != null && newAttrs[key] == null) {
-        newAttrs[key] = src;
-        changed = true;
-      }
-    }
-    // Word does NOT propagate paragraph borders on Enter.
-    if (newAttrs.borders) {
-      newAttrs.borders = null;
-      changed = true;
-    }
-    // Clear any pPrIns/pPrDel that may have been copied by setNodeMarkup
-    // semantics (shouldn't happen since split uses defaults, but defensive).
-    if (newAttrs.pPrIns || newAttrs.pPrDel) {
-      newAttrs.pPrIns = null;
-      newAttrs.pPrDel = null;
-      changed = true;
-    }
-    if (changed) {
-      tr.setNodeMarkup(newParaStart, undefined, newAttrs);
-    }
-  }
+  // Shared with plain Enter: inherits style attrs, clears borders, and
+  // (for an empty new paragraph) sets stored marks so typed text picks up
+  // the source paragraph's font / size / color.
+  applyPostSplitInheritance(tr, sourcePara, styleMarks, state.schema);
 
   dispatch(tr.scrollIntoView());
   return true;
