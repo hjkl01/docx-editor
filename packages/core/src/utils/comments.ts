@@ -89,7 +89,16 @@ export interface TrackedChangeEntry {
     | 'replacement'
     | 'paragraphMarkInsertion'
     | 'paragraphMarkDeletion'
-    | 'paragraphPropertiesChanged';
+    | 'paragraphPropertiesChanged'
+    // Phase 2: table revisions
+    | 'rowInserted'
+    | 'rowDeleted'
+    | 'rowPropertiesChanged'
+    | 'cellInserted'
+    | 'cellDeleted'
+    | 'cellMerged'
+    | 'cellPropertiesChanged'
+    | 'tablePropertiesChanged';
   text: string;
   /** For replacements: the deleted text that was replaced */
   deletedText?: string;

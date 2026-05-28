@@ -33,10 +33,21 @@ export function TrackedChangeCard({
 }: TrackedChangeCardProps) {
   const { t } = useTranslation();
   const authorName = change.author || t('trackedChanges.unknown');
-  const isParagraphMark =
+  // All structural revisions (paragraph-mark + table row/cell/table) accept
+  // by `revisionId`, not by `(from, to)` — they all need the by-id dispatch.
+  const isStructural =
     change.type === 'paragraphMarkInsertion' ||
     change.type === 'paragraphMarkDeletion' ||
-    change.type === 'paragraphPropertiesChanged';
+    change.type === 'paragraphPropertiesChanged' ||
+    change.type === 'rowInserted' ||
+    change.type === 'rowDeleted' ||
+    change.type === 'rowPropertiesChanged' ||
+    change.type === 'cellInserted' ||
+    change.type === 'cellDeleted' ||
+    change.type === 'cellMerged' ||
+    change.type === 'cellPropertiesChanged' ||
+    change.type === 'tablePropertiesChanged';
+  const isParagraphMark = isStructural;
 
   const handleAccept = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -125,6 +136,22 @@ export function TrackedChangeCard({
               </>
             ) : null}
           </>
+        ) : change.type === 'rowInserted' ? (
+          <span style={{ color: '#137333', fontWeight: 500 }}>{t('revisions.rowInserted')}</span>
+        ) : change.type === 'rowDeleted' ? (
+          <span style={{ color: '#c5221f', fontWeight: 500 }}>{t('revisions.rowDeleted')}</span>
+        ) : change.type === 'cellInserted' ? (
+          <span style={{ color: '#137333', fontWeight: 500 }}>{t('revisions.cellInserted')}</span>
+        ) : change.type === 'cellDeleted' ? (
+          <span style={{ color: '#c5221f', fontWeight: 500 }}>{t('revisions.cellDeleted')}</span>
+        ) : change.type === 'cellMerged' ? (
+          <span style={{ color: '#5f6368', fontWeight: 500 }}>{t('revisions.cellMerged')}</span>
+        ) : change.type === 'rowPropertiesChanged' ? (
+          <span style={{ color: '#5f6368' }}>{t('revisions.rowPropertiesChanged')}</span>
+        ) : change.type === 'cellPropertiesChanged' ? (
+          <span style={{ color: '#5f6368' }}>{t('revisions.cellPropertiesChanged')}</span>
+        ) : change.type === 'tablePropertiesChanged' ? (
+          <span style={{ color: '#5f6368' }}>{t('revisions.tablePropertiesChanged')}</span>
         ) : (
           <>
             {change.type === 'insertion' ? t('trackedChanges.added') : t('trackedChanges.deleted')}{' '}

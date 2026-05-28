@@ -92,6 +92,8 @@ test.describe('Tracked paragraph-mark revisions (issue #614)', () => {
 
     expect(await setSuggestionMode(page, true, 'Jane')).toBe(true);
     await page.keyboard.press('Backspace');
+    // Wait for React/PM to flush the Backspace transaction before reading attrs.
+    await page.waitForTimeout(50);
 
     // Paragraphs still split — the join is DEFERRED until accept.
     const first = await getParaRevision(page, 0);
@@ -265,6 +267,30 @@ test.describe('Tracked paragraph-mark revisions (issue #614)', () => {
     expect(after).not.toBeNull();
     expect((after as Record<string, unknown>).pPrChange).toBeNull();
     expect((after as Record<string, unknown>).alignment).toBe('left');
+  });
+
+  test('trIns round-trips and acceptChangeById clears the marker on the row', async ({ page }) => {
+    // Plant a 1×1 table at the cursor via PM dispatch, then plant trIns on
+    // the row and verify acceptChangeById clears it.
+    await page.evaluate(() => window.__DOCX_EDITOR_E2E__?.plantSimpleTable?.());
+    const planted = await page.evaluate(
+      () => window.__DOCX_EDITOR_E2E__?.plantTableRowInsertion?.(77) ?? false
+    );
+    expect(planted, 'plantTableRowInsertion must populate trIns on the first row').toBe(true);
+
+    const rowAttrs = await page.evaluate(
+      () => window.__DOCX_EDITOR_E2E__?.getFirstTableRowAttrs?.() ?? null
+    );
+    expect(rowAttrs?.trIns).toBeTruthy();
+    expect((rowAttrs?.trIns as { revisionId: number }).revisionId).toBe(77);
+
+    // Accept clears the marker (Phase 2 round-trip semantic; full row-remove
+    // semantics come with suggesting-aware commands).
+    expect(await acceptById(page, 77)).toBe(true);
+    const afterAttrs = await page.evaluate(
+      () => window.__DOCX_EDITOR_E2E__?.getFirstTableRowAttrs?.() ?? null
+    );
+    expect(afterAttrs?.trIns).toBeNull();
   });
 
   test('Sidebar surfaces a paragraph-mark revision card with accept/reject', async ({ page }) => {

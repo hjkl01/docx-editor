@@ -170,11 +170,36 @@ export function convertPMTable(node: PMNode, documentCounts?: TrackedChangeCount
       colIndex += coveringAnchor.colspan;
     }
 
-    rows.push({
+    const rowAttrs = rowNode.attrs as TableRowAttrs;
+    const tr: TableRow = {
       type: 'tableRow',
-      formatting: tableRowAttrsToFormatting(rowNode.attrs as TableRowAttrs),
+      formatting: tableRowAttrsToFormatting(rowAttrs),
       cells,
-    });
+    };
+    // Round-trip row-level structural revisions (`<w:trPr><w:ins/>` etc).
+    if (rowAttrs.trIns) {
+      tr.structuralChange = {
+        type: 'tableRowInsertion',
+        info: {
+          id: rowAttrs.trIns.revisionId,
+          author: rowAttrs.trIns.author,
+          ...(rowAttrs.trIns.date ? { date: rowAttrs.trIns.date } : {}),
+        },
+      };
+    } else if (rowAttrs.trDel) {
+      tr.structuralChange = {
+        type: 'tableRowDeletion',
+        info: {
+          id: rowAttrs.trDel.revisionId,
+          author: rowAttrs.trDel.author,
+          ...(rowAttrs.trDel.date ? { date: rowAttrs.trDel.date } : {}),
+        },
+      };
+    }
+    if (rowAttrs.trPrChange && rowAttrs.trPrChange.length > 0) {
+      tr.propertyChanges = rowAttrs.trPrChange;
+    }
+    rows.push(tr);
   }
 
   const formatting = tableAttrsToFormatting(attrs) || undefined;
@@ -196,12 +221,16 @@ export function convertPMTable(node: PMNode, documentCounts?: TrackedChangeCount
     }
   }
 
-  return {
+  const result: Table = {
     type: 'table',
     columnWidths: attrs.columnWidths || undefined,
     formatting,
     rows,
   };
+  if (attrs.tblPrChange && attrs.tblPrChange.length > 0) {
+    result.propertyChanges = attrs.tblPrChange;
+  }
+  return result;
 }
 
 /**
@@ -382,11 +411,28 @@ function convertPMTableCell(node: PMNode, documentCounts?: TrackedChangeCounts):
     }
   });
 
-  return {
+  const cell: TableCell = {
     type: 'tableCell',
     formatting: tableCellAttrsToFormatting(attrs),
     content,
   };
+  // Round-trip cell-level structural revisions (`<w:cellIns>`/`<w:cellDel>`
+  // /`<w:cellMerge>`).
+  if (attrs.cellMarker) {
+    const m = attrs.cellMarker;
+    const info = {
+      id: m.info.revisionId,
+      author: m.info.author,
+      ...(m.info.date ? { date: m.info.date } : {}),
+    };
+    if (m.kind === 'ins') cell.structuralChange = { type: 'tableCellInsertion', info };
+    else if (m.kind === 'del') cell.structuralChange = { type: 'tableCellDeletion', info };
+    else cell.structuralChange = { type: 'tableCellMerge', info };
+  }
+  if (attrs.tcPrChange && attrs.tcPrChange.length > 0) {
+    cell.propertyChanges = attrs.tcPrChange;
+  }
+  return cell;
 }
 
 /**

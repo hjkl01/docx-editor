@@ -311,6 +311,62 @@ export function App() {
         });
         return out;
       },
+      // Test-only: insert a 1x1 table at the cursor (replaces selection),
+      // bypassing the toolbar. Used by the trIns spec.
+      plantSimpleTable: () => {
+        const view = editorRef.current?.getEditorRef()?.getView?.();
+        if (!view) return false;
+        const { schema } = view.state;
+        const cellPara = schema.node('paragraph', {}, [schema.text('A')]);
+        const cell = schema.node('tableCell', { colspan: 1, rowspan: 1 }, [cellPara]);
+        const row = schema.node('tableRow', {}, [cell]);
+        const table = schema.node('table', {}, [row]);
+        view.dispatch(view.state.tr.replaceSelectionWith(table));
+        return true;
+      },
+      // Test-only: plant trIns on the first table row in the document.
+      // Returns false if no table exists.
+      plantTableRowInsertion: (revisionId: number) => {
+        const view = editorRef.current?.getEditorRef()?.getView?.();
+        if (!view) return false;
+        let rowPos: number | null = null;
+        let rowNode: import('prosemirror-model').Node | null = null;
+        view.state.doc.descendants((node, pos) => {
+          if (rowPos != null) return false;
+          if (node.type.name === 'tableRow') {
+            rowPos = pos;
+            rowNode = node;
+            return false;
+          }
+          return true;
+        });
+        if (rowPos == null || rowNode == null) return false;
+        view.dispatch(
+          view.state.tr.setNodeMarkup(rowPos, undefined, {
+            ...(rowNode as import('prosemirror-model').Node).attrs,
+            trIns: {
+              revisionId,
+              author: 'Jane',
+              date: new Date().toISOString(),
+            },
+          })
+        );
+        return true;
+      },
+      getFirstTableRowAttrs: () => {
+        const view = editorRef.current?.getEditorRef()?.getView?.();
+        if (!view) return null;
+        let out: Record<string, unknown> | null = null;
+        view.state.doc.descendants((node) => {
+          if (out != null) return false;
+          if (node.type.name === 'tableRow') {
+            out = { ...node.attrs };
+            return false;
+          }
+          return true;
+        });
+        return out;
+      },
       // Test-only: plant a pPrChange entry on the first paragraph for
       // round-trip / reject-restore verification.
       plantParagraphPropertyChange: (revisionId: number, prior: unknown) => {

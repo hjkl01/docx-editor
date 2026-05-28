@@ -228,6 +228,7 @@ export interface TableAttrs {
     look?: TableLook;
     _originalFormatting?: TableFormatting;
     styleId?: string;
+    tblPrChange?: TablePropertyChange[] | null;
     width?: number;
     widthType?: string;
 }
@@ -241,6 +242,30 @@ export interface TableCellAttrs {
         left?: BorderSpec;
         right?: BorderSpec;
     };
+    cellMarker?: {
+        kind: 'ins';
+        info: {
+            revisionId: number;
+            author: string;
+            date: string | null;
+        };
+    } | {
+        kind: 'del';
+        info: {
+            revisionId: number;
+            author: string;
+            date: string | null;
+        };
+    } | {
+        kind: 'merge';
+        info: {
+            revisionId: number;
+            author: string;
+            date: string | null;
+        };
+        vMerge: 'rest' | 'cont';
+        vMergeOrig?: 'rest' | 'cont';
+    } | null;
     colspan: number;
     colwidth?: number[] | null;
     margins?: {
@@ -253,6 +278,7 @@ export interface TableCellAttrs {
     _originalFormatting?: TableCellFormatting;
     _originalResolvedFill?: string;
     rowspan: number;
+    tcPrChange?: TableCellPropertyChange[] | null;
     textDirection?: string;
     verticalAlign?: 'top' | 'center' | 'bottom';
     width?: number;
@@ -265,6 +291,18 @@ export interface TableRowAttrs {
     heightRule?: string;
     isHeader?: boolean;
     _originalFormatting?: TableRowFormatting;
+    // (undocumented)
+    trDel?: {
+        revisionId: number;
+        author: string;
+        date: string | null;
+    } | null;
+    trIns?: {
+        revisionId: number;
+        author: string;
+        date: string | null;
+    } | null;
+    trPrChange?: TableRowPropertyChange[] | null;
 }
 
 // @public

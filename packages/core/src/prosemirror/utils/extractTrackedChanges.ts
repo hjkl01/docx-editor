@@ -107,6 +107,123 @@ export function extractTrackedChanges(state: EditorState | null): TrackedChanges
       // Descend into paragraph content; do not return here.
     }
 
+    // Table-row revisions (`<w:trPr><w:ins/>` / `<w:del/>` / `<w:trPrChange>`).
+    if (node.type.name === 'tableRow') {
+      const trIns = node.attrs.trIns as {
+        revisionId: number;
+        author: string;
+        date: string | null;
+      } | null;
+      const trDel = node.attrs.trDel as {
+        revisionId: number;
+        author: string;
+        date: string | null;
+      } | null;
+      if (trIns) {
+        raw.push({
+          type: 'rowInserted',
+          text: node.textContent || '',
+          author: trIns.author || '',
+          date: trIns.date ?? undefined,
+          from: pos,
+          to: pos + node.nodeSize,
+          revisionId: trIns.revisionId,
+        });
+      }
+      if (trDel) {
+        raw.push({
+          type: 'rowDeleted',
+          text: node.textContent || '',
+          author: trDel.author || '',
+          date: trDel.date ?? undefined,
+          from: pos,
+          to: pos + node.nodeSize,
+          revisionId: trDel.revisionId,
+        });
+      }
+      const trPrChange = node.attrs.trPrChange as Array<{
+        info: { id: number; author: string; date?: string };
+      }> | null;
+      if (Array.isArray(trPrChange)) {
+        for (const entry of trPrChange) {
+          if (!entry?.info || typeof entry.info.id !== 'number') continue;
+          raw.push({
+            type: 'rowPropertiesChanged',
+            text: node.textContent || '',
+            author: entry.info.author || '',
+            date: entry.info.date ?? undefined,
+            from: pos,
+            to: pos + node.nodeSize,
+            revisionId: entry.info.id,
+          });
+        }
+      }
+      // Descend into cells.
+    }
+
+    // Table-cell revisions (`<w:cellIns>` / `<w:cellDel>` / `<w:cellMerge>`,
+    // `<w:tcPrChange>`).
+    if (node.type.name === 'tableCell' || node.type.name === 'tableHeader') {
+      const cellMarker = node.attrs.cellMarker as {
+        kind: 'ins' | 'del' | 'merge';
+        info: { revisionId: number; author: string; date: string | null };
+      } | null;
+      if (cellMarker?.info && typeof cellMarker.info.revisionId === 'number') {
+        const kindToType = {
+          ins: 'cellInserted' as const,
+          del: 'cellDeleted' as const,
+          merge: 'cellMerged' as const,
+        };
+        raw.push({
+          type: kindToType[cellMarker.kind],
+          text: node.textContent || '',
+          author: cellMarker.info.author || '',
+          date: cellMarker.info.date ?? undefined,
+          from: pos,
+          to: pos + node.nodeSize,
+          revisionId: cellMarker.info.revisionId,
+        });
+      }
+      const tcPrChange = node.attrs.tcPrChange as Array<{
+        info: { id: number; author: string; date?: string };
+      }> | null;
+      if (Array.isArray(tcPrChange)) {
+        for (const entry of tcPrChange) {
+          if (!entry?.info || typeof entry.info.id !== 'number') continue;
+          raw.push({
+            type: 'cellPropertiesChanged',
+            text: node.textContent || '',
+            author: entry.info.author || '',
+            date: entry.info.date ?? undefined,
+            from: pos,
+            to: pos + node.nodeSize,
+            revisionId: entry.info.id,
+          });
+        }
+      }
+    }
+
+    // Table-level property change (`<w:tblPrChange>`).
+    if (node.type.name === 'table') {
+      const tblPrChange = node.attrs.tblPrChange as Array<{
+        info: { id: number; author: string; date?: string };
+      }> | null;
+      if (Array.isArray(tblPrChange)) {
+        for (const entry of tblPrChange) {
+          if (!entry?.info || typeof entry.info.id !== 'number') continue;
+          raw.push({
+            type: 'tablePropertiesChanged',
+            text: '',
+            author: entry.info.author || '',
+            date: entry.info.date ?? undefined,
+            from: pos,
+            to: pos + node.nodeSize,
+            revisionId: entry.info.id,
+          });
+        }
+      }
+    }
+
     if (!node.isText) return;
     let tcMark: Mark | null = null;
     for (const mark of node.marks) {

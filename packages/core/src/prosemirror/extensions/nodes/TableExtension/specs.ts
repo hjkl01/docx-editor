@@ -27,6 +27,9 @@ export const tableSpec: NodeSpec = {
     cellMargins: { default: null },
     look: { default: null },
     _originalFormatting: { default: null },
+    // Table-property change history (`<w:tblPrChange>`). Round-trip only;
+    // accept/reject by id resolves the entry. Serializer clamps to one entry.
+    tblPrChange: { default: null },
   },
   parseDOM: [
     {
@@ -82,6 +85,11 @@ export const tableRowSpec: NodeSpec = {
     heightRule: { default: null },
     isHeader: { default: false },
     _originalFormatting: { default: null },
+    // Row-mark insertion / deletion (`<w:trPr><w:ins/>` / `<w:del/>`) and
+    // row-property change history. See ECMA-376 §17.13.5.
+    trIns: { default: null },
+    trDel: { default: null },
+    trPrChange: { default: null },
   },
   parseDOM: [{ tag: 'tr' }],
   toDOM(node) {
@@ -91,6 +99,15 @@ export const tableRowSpec: NodeSpec = {
     if (attrs.height) {
       const heightPx = Math.round((attrs.height / 20) * 1.333);
       domAttrs.style = `height: ${heightPx}px`;
+    }
+
+    if (attrs.trIns || attrs.trDel) {
+      const rev = attrs.trIns ?? attrs.trDel!;
+      const kindClass = attrs.trIns ? 'ep-revision-ins' : 'ep-revision-del';
+      domAttrs.class = 'ep-revision-row ' + kindClass;
+      domAttrs['data-revision-id'] = String(rev.revisionId);
+      domAttrs['data-revision-author'] = rev.author;
+      if (rev.date) domAttrs['data-revision-date'] = rev.date;
     }
 
     return ['tr', domAttrs, 0];
@@ -230,6 +247,11 @@ export const tableCellSpec: NodeSpec = {
     noWrap: { default: false },
     _originalFormatting: { default: null },
     _originalResolvedFill: { default: null },
+    // Cell structural marker (ins/del/merge) and property change history.
+    // `cellMarker` is mutually exclusive per EG_CellMarkupElements; merge
+    // is vertical-only (vMerge/vMergeOrig).
+    cellMarker: { default: null },
+    tcPrChange: { default: null },
   },
   parseDOM: [
     {
@@ -240,6 +262,20 @@ export const tableCellSpec: NodeSpec = {
   toDOM(node) {
     const attrs = node.attrs as TableCellAttrs;
     const domAttrs: Record<string, string> = { class: 'docx-table-cell' };
+    if (attrs.cellMarker) {
+      const m = attrs.cellMarker;
+      const kindClass =
+        m.kind === 'ins'
+          ? 'ep-revision-ins'
+          : m.kind === 'del'
+            ? 'ep-revision-del'
+            : 'ep-revision-merge';
+      domAttrs.class = `${domAttrs.class} ep-revision-cell ${kindClass}`;
+      domAttrs['data-revision-id'] = String(m.info.revisionId);
+      domAttrs['data-revision-author'] = m.info.author;
+      if (m.info.date) domAttrs['data-revision-date'] = m.info.date;
+      if (m.kind === 'merge') domAttrs['data-vmerge'] = m.vMerge;
+    }
 
     if (attrs.colspan > 1) domAttrs.colspan = String(attrs.colspan);
     if (attrs.rowspan > 1) domAttrs.rowspan = String(attrs.rowspan);
@@ -289,6 +325,8 @@ export const tableHeaderSpec: NodeSpec = {
     noWrap: { default: false },
     _originalFormatting: { default: null },
     _originalResolvedFill: { default: null },
+    cellMarker: { default: null },
+    tcPrChange: { default: null },
   },
   parseDOM: [
     {

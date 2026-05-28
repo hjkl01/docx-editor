@@ -200,6 +200,18 @@ interface ParagraphPropertyChangeSite {
   prior: import('../../types/document').ParagraphFormatting | undefined;
 }
 
+interface TableRowSite {
+  pos: number;
+  node: import('prosemirror-model').Node;
+  kind: 'trIns' | 'trDel';
+}
+
+interface TableCellMarkerSite {
+  pos: number;
+  node: import('prosemirror-model').Node;
+  cellKind: 'ins' | 'del' | 'merge';
+}
+
 /**
  * Walk the document and collect every paragraph that carries a
  * `pPrIns` or `pPrDel` attr with the given revision id.
@@ -417,15 +429,48 @@ function applyPriorParagraphFormattingToAttrs(
  *   accept deletion mark → remove text and mark.
  *   reject deletion mark → keep text, drop mark.
  */
+/** Find every table row carrying `trIns` or `trDel` with the given id. */
+function findTableRowSites(state: EditorState, revisionId: number): TableRowSite[] {
+  const sites: TableRowSite[] = [];
+  state.doc.descendants((node, pos) => {
+    if (node.type.name !== 'tableRow') return;
+    const ins = node.attrs.trIns as { revisionId: number } | null;
+    const del = node.attrs.trDel as { revisionId: number } | null;
+    if (ins && ins.revisionId === revisionId) sites.push({ pos, node, kind: 'trIns' });
+    if (del && del.revisionId === revisionId) sites.push({ pos, node, kind: 'trDel' });
+  });
+  return sites;
+}
+
+/** Find every table cell carrying `cellMarker` with the given id. */
+function findTableCellMarkerSites(state: EditorState, revisionId: number): TableCellMarkerSite[] {
+  const sites: TableCellMarkerSite[] = [];
+  state.doc.descendants((node, pos) => {
+    if (node.type.name !== 'tableCell' && node.type.name !== 'tableHeader') return;
+    const m = node.attrs.cellMarker as {
+      kind: 'ins' | 'del' | 'merge';
+      info: { revisionId: number };
+    } | null;
+    if (m?.info?.revisionId === revisionId) {
+      sites.push({ pos, node, cellKind: m.kind });
+    }
+  });
+  return sites;
+}
+
 function resolveById(revisionId: number, mode: 'accept' | 'reject'): Command {
   return (state, dispatch) => {
     const paragraphMarkSites = findParagraphMarkSites(state, revisionId);
     const inlineSites = findInlineMarkSites(state, revisionId);
     const propChangeSites = findParagraphPropertyChangeSites(state, revisionId);
+    const tableRowSites = findTableRowSites(state, revisionId);
+    const tableCellSites = findTableCellMarkerSites(state, revisionId);
     if (
       paragraphMarkSites.length === 0 &&
       inlineSites.length === 0 &&
-      propChangeSites.length === 0
+      propChangeSites.length === 0 &&
+      tableRowSites.length === 0 &&
+      tableCellSites.length === 0
     ) {
       return false;
     }
@@ -518,6 +563,48 @@ function resolveById(revisionId: number, mode: 'accept' | 'reject'): Command {
         clearParagraphPropertyChangeEntry(tr, mappedPos, liveIndex);
       }
     }
+
+    // Phase 2: table-cell markers (cellIns / cellDel / cellMerge). Resolved
+    // before rows so when a row is deleted, its cells' markers don't trail.
+    // Per OOXML, accept(cellIns) = clear; reject(cellIns) = delete cell;
+    // accept(cellDel) = delete cell; reject(cellDel) = clear; accept(merge)
+    // = apply merge (out-of-scope for round-trip-only — clear marker);
+    // reject(merge) = clear marker.
+    const sortedCells = [...tableCellSites].sort((a, b) => b.pos - a.pos);
+    for (const site of sortedCells) {
+      const mappedPos = tr.mapping.map(site.pos);
+      const live = tr.doc.nodeAt(mappedPos);
+      if (!live || (live.type.name !== 'tableCell' && live.type.name !== 'tableHeader')) continue;
+      const m = live.attrs.cellMarker as {
+        kind: 'ins' | 'del' | 'merge';
+        info: { revisionId: number };
+      } | null;
+      if (!m || m.info.revisionId !== revisionId) continue;
+      // Removing/deleting a cell at this level is unsafe (prosemirror-tables
+      // would corrupt the grid). For round-trip cleanup we just clear the
+      // marker; suggesting-mode commands that author the marker will
+      // accept-with-structural-mutation in a future phase.
+      tr.setNodeMarkup(mappedPos, undefined, { ...live.attrs, cellMarker: null });
+    }
+
+    // Phase 2: table-row markers (trIns / trDel). Same caveat — we clear the
+    // marker on both accept and reject for now; full row removal needs the
+    // upcoming suggesting-aware command path.
+    const sortedRows = [...tableRowSites].sort((a, b) => b.pos - a.pos);
+    for (const site of sortedRows) {
+      const mappedPos = tr.mapping.map(site.pos);
+      const live = tr.doc.nodeAt(mappedPos);
+      if (!live || live.type.name !== 'tableRow') continue;
+      const trIns = live.attrs.trIns as { revisionId: number } | null;
+      const trDel = live.attrs.trDel as { revisionId: number } | null;
+      const newAttrs = { ...live.attrs };
+      if (trIns?.revisionId === revisionId) newAttrs.trIns = null;
+      if (trDel?.revisionId === revisionId) newAttrs.trDel = null;
+      tr.setNodeMarkup(mappedPos, undefined, newAttrs);
+    }
+    // Suppress unused-arg warning for `mode` in the cell/row branches (the
+    // semantic differences land with suggesting-mode commands).
+    void mode;
 
     if (tr.steps.length === 0) return false;
     dispatch(tr);

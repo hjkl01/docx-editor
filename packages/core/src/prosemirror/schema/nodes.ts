@@ -268,6 +268,13 @@ export interface TableAttrs {
   look?: TableLook;
   /** Original table formatting from DOCX for lossless round-trip serialization */
   _originalFormatting?: TableFormatting;
+  /**
+   * Table-property change history (`<w:tblPrChange>`). Same shape as the
+   * model `Table.propertyChanges`. OOXML allows at most one entry per table
+   * on disk (CT_TblPr maxOccurs="1"); the model/array allows in-memory
+   * stacking, serializer clamps to the first.
+   */
+  tblPrChange?: import('../../types/document').TablePropertyChange[] | null;
 }
 
 /**
@@ -282,6 +289,15 @@ export interface TableRowAttrs {
   isHeader?: boolean;
   /** Original row formatting from DOCX for lossless round-trip serialization */
   _originalFormatting?: TableRowFormatting;
+  /**
+   * Row-mark insertion / deletion (`<w:trPr><w:ins/>` / `<w:del/>`).
+   * Authored by inserting/deleting a row in suggesting mode. The row stays
+   * present until accept (for delete) or reject (for insert).
+   */
+  trIns?: { revisionId: number; author: string; date: string | null } | null;
+  trDel?: { revisionId: number; author: string; date: string | null } | null;
+  /** Row-property change history (`<w:trPrChange>`). */
+  trPrChange?: import('../../types/document').TableRowPropertyChange[] | null;
 }
 
 /**
@@ -319,4 +335,24 @@ export interface TableCellAttrs {
    * tint/shade); if they did, we write plain rgb.
    */
   _originalResolvedFill?: string;
+  /**
+   * Cell structural revision marker. Mutually exclusive per
+   * `EG_CellMarkupElements` (wml.xsd) — a cell can carry at most one of
+   * `cellIns`, `cellDel`, or `cellMerge`. `merge` is VERTICAL only
+   * (`<w:cellMerge w:vMerge="rest|cont"/>`); horizontal merge is
+   * conveyed via `cellIns` on the merging cell and `cellDel` on absorbed
+   * cells (Word's on-disk convention).
+   */
+  cellMarker?:
+    | { kind: 'ins'; info: { revisionId: number; author: string; date: string | null } }
+    | { kind: 'del'; info: { revisionId: number; author: string; date: string | null } }
+    | {
+        kind: 'merge';
+        info: { revisionId: number; author: string; date: string | null };
+        vMerge: 'rest' | 'cont';
+        vMergeOrig?: 'rest' | 'cont';
+      }
+    | null;
+  /** Cell-property change history (`<w:tcPrChange>`). */
+  tcPrChange?: import('../../types/document').TableCellPropertyChange[] | null;
 }

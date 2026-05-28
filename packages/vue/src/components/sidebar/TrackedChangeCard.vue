@@ -43,6 +43,30 @@
       <template v-else-if="change.type === 'paragraphPropertiesChanged'">
         Changed paragraph properties<template v-if="change.text">: <span class="tc-card__changed">&quot;{{ truncateText(change.text) }}&quot;</span></template>
       </template>
+      <template v-else-if="change.type === 'rowInserted'">
+        <span class="tc-card__inserted">Inserted row</span>
+      </template>
+      <template v-else-if="change.type === 'rowDeleted'">
+        <span class="tc-card__deleted">Deleted row</span>
+      </template>
+      <template v-else-if="change.type === 'cellInserted'">
+        <span class="tc-card__inserted">Inserted cell</span>
+      </template>
+      <template v-else-if="change.type === 'cellDeleted'">
+        <span class="tc-card__deleted">Deleted cell</span>
+      </template>
+      <template v-else-if="change.type === 'cellMerged'">
+        <span class="tc-card__changed">Merged cells</span>
+      </template>
+      <template v-else-if="change.type === 'rowPropertiesChanged'">
+        <span class="tc-card__changed">Changed row properties</span>
+      </template>
+      <template v-else-if="change.type === 'cellPropertiesChanged'">
+        <span class="tc-card__changed">Changed cell properties</span>
+      </template>
+      <template v-else-if="change.type === 'tablePropertiesChanged'">
+        <span class="tc-card__changed">Changed table properties</span>
+      </template>
       <template v-else>
         {{ change.type === 'insertion' ? 'Added' : 'Deleted' }}
         <span :class="change.type === 'insertion' ? 'tc-card__inserted' : 'tc-card__deleted'">
@@ -84,12 +108,22 @@ const emit = defineEmits<{
 
 const authorName = computed(() => props.change.author || 'Unknown');
 
-const isParagraphMark = computed(
-  () =>
-    props.change.type === 'paragraphMarkInsertion' ||
-    props.change.type === 'paragraphMarkDeletion' ||
-    props.change.type === 'paragraphPropertiesChanged'
-);
+const isParagraphMark = computed(() => {
+  const t = props.change.type;
+  return (
+    t === 'paragraphMarkInsertion' ||
+    t === 'paragraphMarkDeletion' ||
+    t === 'paragraphPropertiesChanged' ||
+    t === 'rowInserted' ||
+    t === 'rowDeleted' ||
+    t === 'rowPropertiesChanged' ||
+    t === 'cellInserted' ||
+    t === 'cellDeleted' ||
+    t === 'cellMerged' ||
+    t === 'cellPropertiesChanged' ||
+    t === 'tablePropertiesChanged'
+  );
+});
 
 function onAccept() {
   if (isParagraphMark.value) emit('accept-by-id', props.change.revisionId);
