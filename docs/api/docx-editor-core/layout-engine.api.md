@@ -706,6 +706,10 @@ export type TableCell = {
         left: number;
     };
     noWrap?: boolean;
+    trackedMarker?: {
+        kind: 'ins' | 'del' | 'merge';
+        info: RevisionInfo;
+    };
 };
 
 // @public
@@ -745,6 +749,8 @@ export type TableRow = {
     height?: number;
     heightRule?: 'auto' | 'atLeast' | 'exact';
     isHeader?: boolean;
+    trackedIns?: RevisionInfo;
+    trackedDel?: RevisionInfo;
 };
 
 // @public
