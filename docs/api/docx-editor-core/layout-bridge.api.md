@@ -4,6 +4,7 @@
 
 ```ts
 
+import { EditorView } from 'prosemirror-view';
 import { Node as Node_2 } from 'prosemirror-model';
 
 // @public
@@ -79,6 +80,21 @@ export function collectFootnoteRefs(blocks: FlowBlock[]): Array<{
 }>;
 
 // @public
+export function computeHfCaretRectFromView(view: EditorView, doc?: globalThis.Document): {
+    top: number;
+    left: number;
+    height: number;
+} | null;
+
+// @public
+export function computeHfSelectionRectsFromView(view: EditorView, doc?: globalThis.Document): Array<{
+    top: number;
+    left: number;
+    width: number;
+    height: number;
+}>;
+
+// @public
 export function convertBorderSpecToLayout(border: {
     style?: string;
     size?: number;
@@ -109,6 +125,9 @@ export type ConvertHeaderFooterOptions = {
     measureBlocks: MeasureBlocksFn;
     defaultTabStopTwips?: number | null;
 };
+
+// @public
+export function convertHeaderFooterPmDocToContent(pmDoc: Node_2, contentWidth: number, metrics: HeaderFooterMetrics, options: ConvertHeaderFooterOptions): HeaderFooterContent | undefined;
 
 // @public
 export function convertHeaderFooterToContent(headerFooter: HeaderFooter | null | undefined, contentWidth: number, metrics: HeaderFooterMetrics, options: ConvertHeaderFooterOptions): HeaderFooterContent | undefined;
@@ -381,6 +400,9 @@ export type HitTestResult = {
 
 // @public
 export function hitTestTableCell(pageHit: PageHit, blocks: FlowBlock[], measures: Measure[], pagePoint: Point): TableCellHit | null;
+
+// @public
+export function invalidateHfDomCache(): void;
 
 // @public
 export function isMultiPageSelection(rects: SelectionRect[]): boolean;
