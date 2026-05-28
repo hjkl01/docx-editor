@@ -7,7 +7,6 @@ import {
   addRowBelow,
   deleteRow,
 } from '@eigenpal/docx-editor-core/prosemirror/commands';
-import { TextSelection } from 'prosemirror-state';
 import { DocxEditor, type DocxEditorRef } from '@eigenpal/docx-editor-react';
 import {
   AgentChatLog,
@@ -363,7 +362,14 @@ export function App() {
           return true;
         });
         if (target == null) return false;
-        const tr = view.state.tr.setSelection(TextSelection.near(view.state.doc.resolve(target)));
+        // Use the constructor on the live selection to avoid a direct
+        // `prosemirror-state` dependency in the demo's package.json.
+        const SelectionCtor = view.state.selection.constructor as unknown as {
+          near: (
+            $pos: import('prosemirror-model').ResolvedPos
+          ) => import('prosemirror-state').Selection;
+        };
+        const tr = view.state.tr.setSelection(SelectionCtor.near(view.state.doc.resolve(target)));
         view.dispatch(tr);
         view.focus();
         return true;

@@ -76,7 +76,6 @@ import {
   addRowBelow,
   deleteRow,
 } from '@eigenpal/docx-editor-core/prosemirror/commands';
-import { TextSelection } from 'prosemirror-state';
 import type { Node as PMNode } from 'prosemirror-model';
 
 const randomAuthorVue = `Docx Editor User ${Math.floor(Math.random() * 900) + 100}`;
@@ -432,7 +431,10 @@ onMounted(async () => {
           return true;
         });
         if (target == null) return false;
-        const tr = view.state.tr.setSelection(TextSelection.near(view.state.doc.resolve(target)));
+        // Use the constructor on the live selection to avoid a direct
+        // `prosemirror-state` dependency in the demo's package.json.
+        const SelectionCtor = (view.state.selection as any).constructor;
+        const tr = view.state.tr.setSelection(SelectionCtor.near(view.state.doc.resolve(target)));
         view.dispatch(tr);
         view.focus();
         return true;
