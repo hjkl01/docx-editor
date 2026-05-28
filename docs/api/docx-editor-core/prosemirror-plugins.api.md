@@ -25,6 +25,19 @@ export function getSelectionContext(state: EditorState): SelectionContext | null
 export function isSuggestionModeActive(state: EditorState): boolean;
 
 // @public
+export function makeRevisionInfo(state: EditorState): RevisionInfo | null;
+
+// @public
+export interface RevisionInfo {
+    // (undocumented)
+    author: string;
+    // (undocumented)
+    date: string | null;
+    // (undocumented)
+    revisionId: number;
+}
+
+// @public
 export type SelectionChangeCallback = (context: SelectionContext) => void;
 
 // @public

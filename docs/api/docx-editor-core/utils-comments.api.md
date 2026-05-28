@@ -16,21 +16,15 @@ export function getCommentText(paragraphs?: Paragraph[]): string;
 // @public (undocumented)
 export function getInitials(name: string): string;
 
-// @public (undocumented)
+// @public
 export interface TrackedChangeEntry {
-    // (undocumented)
     author: string;
-    // (undocumented)
     date?: string;
     deletedText?: string;
-    // (undocumented)
     from: number;
     insertionRevisionId?: number;
-    // (undocumented)
     revisionId: number;
-    // (undocumented)
     text: string;
-    // (undocumented)
     to: number;
     type: 'insertion' | 'deletion' | 'replacement' | 'paragraphMarkInsertion' | 'paragraphMarkDeletion' | 'paragraphPropertiesChanged' | 'rowInserted' | 'rowDeleted' | 'rowPropertiesChanged' | 'cellInserted' | 'cellDeleted' | 'cellMerged' | 'cellPropertiesChanged' | 'tablePropertiesChanged';
 }
