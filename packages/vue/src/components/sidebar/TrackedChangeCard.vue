@@ -67,6 +67,12 @@
       <template v-else-if="change.type === 'tablePropertiesChanged'">
         <span class="tc-card__changed">{{ t('revisions.tablePropertiesChanged') }}</span>
       </template>
+      <template v-else-if="change.type === 'tableInserted'">
+        <span class="tc-card__inserted">{{ t('revisions.tableInserted') }}</span>
+      </template>
+      <template v-else-if="change.type === 'tableDeleted'">
+        <span class="tc-card__deleted">{{ t('revisions.tableDeleted') }}</span>
+      </template>
       <template v-else>
         {{ change.type === 'insertion' ? t('trackedChanges.added') : t('trackedChanges.deleted') }}
         <span :class="change.type === 'insertion' ? 'tc-card__inserted' : 'tc-card__deleted'">

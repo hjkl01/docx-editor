@@ -561,7 +561,9 @@
     "cellDeleted": "Deleted cell",
     "cellMerged": "Merged cells",
     "cellPropertiesChanged": "Changed cell properties",
-    "tablePropertiesChanged": "Changed table properties"
+    "tablePropertiesChanged": "Changed table properties",
+    "tableInserted": "Inserted table",
+    "tableDeleted": "Deleted table"
   },
   "contextMenu": {
     "ariaLabel": "AI actions menu",

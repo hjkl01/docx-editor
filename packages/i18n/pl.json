@@ -830,6 +830,8 @@
     "rowDeleted": null,
     "rowInserted": null,
     "rowPropertiesChanged": null,
-    "tablePropertiesChanged": null
+    "tablePropertiesChanged": null,
+    "tableDeleted": null,
+    "tableInserted": null
   }
 }

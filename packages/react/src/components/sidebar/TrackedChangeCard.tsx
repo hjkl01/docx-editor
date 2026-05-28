@@ -174,6 +174,10 @@ export function TrackedChangeCard({
           <span style={{ color: '#5f6368' }}>{t('revisions.cellPropertiesChanged')}</span>
         ) : change.type === 'tablePropertiesChanged' ? (
           <span style={{ color: '#5f6368' }}>{t('revisions.tablePropertiesChanged')}</span>
+        ) : change.type === 'tableInserted' ? (
+          <span style={{ color: '#137333', fontWeight: 500 }}>{t('revisions.tableInserted')}</span>
+        ) : change.type === 'tableDeleted' ? (
+          <span style={{ color: '#c5221f', fontWeight: 500 }}>{t('revisions.tableDeleted')}</span>
         ) : (
           <>
             {change.type === 'insertion' ? t('trackedChanges.added') : t('trackedChanges.deleted')}{' '}

@@ -119,6 +119,8 @@ export interface TrackedChangeEntry {
     | 'cellDeleted'
     | 'cellMerged'
     | 'cellPropertiesChanged'
+    | 'tableInserted'
+    | 'tableDeleted'
     | 'tablePropertiesChanged';
   /**
    * Affected text. For inline types this is the run's text; for

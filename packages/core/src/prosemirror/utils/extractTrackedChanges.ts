@@ -250,6 +250,43 @@ export function extractTrackedChanges(state: EditorState | null): TrackedChanges
           });
         }
       }
+
+      // Whole-table insertion / deletion: when every row carries the SAME
+      // trIns (or trDel) revision, surface ONE `tableInserted` /
+      // `tableDeleted` entry. The structural coalesce pass then prefers
+      // this over the per-row entries (highest priority). Matches user's
+      // mental model "insert table = one card" vs "edit cell = N cards".
+      const firstRow = node.firstChild;
+      const firstIns = firstRow?.attrs.trIns as { revisionId: number } | null | undefined;
+      const firstDel = firstRow?.attrs.trDel as { revisionId: number } | null | undefined;
+      const sharedAttr = firstIns ? 'trIns' : firstDel ? 'trDel' : null;
+      if (sharedAttr) {
+        const sharedRev = (firstIns ?? firstDel) as {
+          revisionId: number;
+          author: string;
+          date: string | null;
+        };
+        let allShare = true;
+        node.forEach((row) => {
+          if (row.type.name !== 'tableRow') {
+            allShare = false;
+            return;
+          }
+          const v = row.attrs[sharedAttr] as { revisionId: number } | null | undefined;
+          if (!v || v.revisionId !== sharedRev.revisionId) allShare = false;
+        });
+        if (allShare) {
+          raw.push({
+            type: sharedAttr === 'trIns' ? 'tableInserted' : 'tableDeleted',
+            text: node.textContent || '',
+            author: sharedRev.author || '',
+            date: sharedRev.date ?? undefined,
+            from: pos,
+            to: pos + node.nodeSize,
+            revisionId: sharedRev.revisionId,
+          });
+        }
+      }
     }
 
     if (!node.isText) return;
@@ -293,6 +330,8 @@ export function extractTrackedChanges(state: EditorState | null): TrackedChanges
   // in-place replacement is O(1) (vs `ordered.indexOf(existing)` which
   // would be O(n) inside an O(n) loop).
   const STRUCTURAL_PRIORITY: Record<string, number> = {
+    tableInserted: 6,
+    tableDeleted: 6,
     tablePropertiesChanged: 5,
     rowInserted: 4,
     rowDeleted: 4,
