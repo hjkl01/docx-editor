@@ -28,6 +28,7 @@ import {
 import { fromProseDoc } from '@eigenpal/docx-editor-core/prosemirror/conversion/fromProseDoc';
 import { schema } from '@eigenpal/docx-editor-core/prosemirror';
 import { singletonManager } from '@eigenpal/docx-editor-core/prosemirror/schema';
+import { createSuggestionModePlugin } from '@eigenpal/docx-editor-core/prosemirror/plugins';
 import {
   ExtensionManager,
   createStarterKit,
@@ -492,7 +493,11 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
         })
       : createEmptyDoc();
 
-    const plugins: Plugin[] = [...externalPlugins, ...(mgr.getPlugins() ?? [])];
+    // Suggestion-mode plugin is registered inactive; `setSuggestionMode()`
+    // toggles its `active` state via PluginKey meta. Mirrors React's
+    // mount-once-and-toggle pattern (DocxEditor.tsx createSuggestionModePlugin).
+    const suggestionPlugin = createSuggestionModePlugin(false);
+    const plugins: Plugin[] = [suggestionPlugin, ...externalPlugins, ...(mgr.getPlugins() ?? [])];
 
     const state = EditorState.create({
       doc,

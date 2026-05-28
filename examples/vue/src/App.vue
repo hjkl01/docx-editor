@@ -501,6 +501,15 @@ onMounted(async () => {
     };
   }
 
+  // Under E2E with ?empty=1, boot empty so tests get a deterministic,
+  // known starting document instead of racing the async fixture fetch.
+  // Mirrors the React demo's behavior in examples/vite/src/App.tsx.
+  if (isE2E && params.get('empty') === '1') {
+    currentDocument.value = createEmptyDocument();
+    fileName.value = 'Untitled.docx';
+    return;
+  }
+
   try {
     const res = await fetch(`${import.meta.env.BASE_URL}docx-editor-demo.docx`);
     const buffer = await res.arrayBuffer();
