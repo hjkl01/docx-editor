@@ -366,6 +366,40 @@ test.describe('Tracked paragraph-mark revisions (issue #614)', () => {
     expect(await trDel.getAttribute('data-revision-author')).toBe('Jane');
   });
 
+  test('A typing run with Enters in the middle coalesces into one revision', async ({ page }) => {
+    // The full "best practice" scenario: in suggesting mode, type "abc",
+    // press Enter, type "def", press Enter, type "ghi". All inline insertion
+    // marks AND both pPrIns paragraph-marks should share the SAME revisionId
+    // so the sidebar shows ONE card and ONE Accept clears the whole run.
+    expect(await setSuggestionMode(page, true, 'Jane')).toBe(true);
+    await editor.typeText('abc');
+    await editor.pressEnter();
+    await editor.typeText('def');
+    await editor.pressEnter();
+    await editor.typeText('ghi');
+    await page.waitForTimeout(50);
+
+    // Collect every revisionId visible in the painted DOM — both pilcrow
+    // fragments (.layout-revision-pmark) and inline insertion runs
+    // (.docx-insertion). If coalescing works, all share one id.
+    const ids = await page.$$eval(
+      '.layout-revision-pmark[data-revision-id], .docx-insertion[data-revision-id]',
+      (els) =>
+        els.map((el) => Number((el as HTMLElement).dataset.revisionId)).filter(Number.isFinite)
+    );
+    expect(ids.length).toBeGreaterThanOrEqual(4); // 2 pilcrows + 3 typed runs
+    expect(new Set(ids).size).toBe(1);
+
+    // One Accept clears every coalesced site.
+    expect(await acceptById(page, ids[0])).toBe(true);
+    await page.waitForTimeout(50);
+    expect(
+      await page
+        .locator('.layout-revision-pmark[data-revision-id], .docx-insertion[data-revision-id]')
+        .count()
+    ).toBe(0);
+  });
+
   test('Consecutive Enters by the same author coalesce into one revision', async ({ page }) => {
     // Word groups a run of tracked paragraph-mark insertions by the same
     // author into one change. The sidebar should show ONE card for three

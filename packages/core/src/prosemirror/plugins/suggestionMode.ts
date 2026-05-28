@@ -55,9 +55,40 @@ function makeRevisionInfo(pluginState: SuggestionModeState): MarkAttrs {
   return makeMarkAttrs(pluginState);
 }
 
+/** Walk into `block` to its last text node (rightmost in doc order). */
+function lastTextOf(block: PMNode): PMNode | null {
+  let last: PMNode | null = null;
+  block.descendants((node) => {
+    if (node.isText) last = node;
+  });
+  return last;
+}
+
+/** Walk into `block` to its first text node (leftmost in doc order). */
+function firstTextOf(block: PMNode): PMNode | null {
+  let first: PMNode | null = null;
+  block.descendants((node) => {
+    if (first) return false;
+    if (node.isText) {
+      first = node;
+      return false;
+    }
+    return true;
+  });
+  return first;
+}
+
 /**
  * Find an adjacent mark of the same type by the same author.
  * Reuses its revisionId so consecutive edits group into one change.
+ *
+ * Looks in three places, in this priority order:
+ *   1. `$pos.nodeBefore` / `nodeAfter` (same parent — handles in-block typing)
+ *   2. Last text node of the previous block when at a block start
+ *   3. First text node of the next block when at a block end
+ *
+ * Cross-block lookup is what makes "type abc, Enter, type def" coalesce
+ * into one tracked change even though Enter splits the parent.
  */
 function findAdjacentRevision(
   doc: PMNode,
@@ -65,14 +96,34 @@ function findAdjacentRevision(
   markTypeName: string,
   author: string
 ): MarkAttrs | null {
+  const matches = (node: PMNode | null | undefined): MarkAttrs | null => {
+    if (!node?.isText) return null;
+    const mark = node.marks.find((m) => m.type.name === markTypeName && m.attrs.author === author);
+    return mark ? (mark.attrs as MarkAttrs) : null;
+  };
   try {
     const $pos = doc.resolve(pos);
     for (const node of [$pos.nodeBefore, $pos.nodeAfter]) {
-      if (node?.isText) {
-        const mark = node.marks.find(
-          (m) => m.type.name === markTypeName && m.attrs.author === author
-        );
-        if (mark) return mark.attrs as MarkAttrs;
+      const hit = matches(node);
+      if (hit) return hit;
+    }
+    // Cross-block: at a block boundary, peek into the neighboring block.
+    if ($pos.parentOffset === 0 && $pos.depth > 0) {
+      const blockStart = $pos.before($pos.depth);
+      if (blockStart > 0) {
+        const prevBlock = doc.resolve(blockStart).nodeBefore;
+        if (prevBlock) {
+          const hit = matches(lastTextOf(prevBlock));
+          if (hit) return hit;
+        }
+      }
+    }
+    if ($pos.parentOffset === $pos.parent.content.size && $pos.depth > 0) {
+      const blockEnd = $pos.after($pos.depth);
+      const nextBlock = doc.resolve(blockEnd).nodeAfter;
+      if (nextBlock) {
+        const hit = matches(firstTextOf(nextBlock));
+        if (hit) return hit;
       }
     }
   } catch {
@@ -114,13 +165,37 @@ function findAdjacentParagraphMark(
   attr: 'pPrIns' | 'pPrDel',
   author: string
 ): MarkAttrs | null {
+  // The inline mark that pairs with this paragraph-mark attr — pPrIns lives
+  // in the same conceptual change as inline `insertion` marks, pPrDel with
+  // inline `deletion` marks. Sharing revisionIds across paragraph-mark and
+  // adjacent inline marks lets one Accept resolve a whole editing run.
+  const inlineMarkName = attr === 'pPrIns' ? 'insertion' : 'deletion';
   try {
     const $pos = doc.resolve(paraStart);
-    const candidates: Array<PMNode | null | undefined> = [$pos.nodeBefore, $pos.nodeAfter];
-    for (const node of candidates) {
+    // Sibling paragraph carrying the same paragraph-mark attr.
+    for (const node of [$pos.nodeBefore, $pos.nodeAfter]) {
       if (node?.type.name !== 'paragraph') continue;
       const existing = node.attrs[attr] as MarkAttrs | null;
       if (existing && existing.author === author) return existing;
+    }
+    // Inline mark at the END of the previous paragraph (typed text right
+    // before this Enter) or the START of the next paragraph (typed text
+    // right after).
+    const prev = $pos.nodeBefore;
+    if (prev?.type.name === 'paragraph') {
+      const lastText = lastTextOf(prev);
+      const mark = lastText?.marks.find(
+        (m) => m.type.name === inlineMarkName && m.attrs.author === author
+      );
+      if (mark) return mark.attrs as MarkAttrs;
+    }
+    const next = $pos.nodeAfter;
+    if (next?.type.name === 'paragraph') {
+      const firstText = firstTextOf(next);
+      const mark = firstText?.marks.find(
+        (m) => m.type.name === inlineMarkName && m.attrs.author === author
+      );
+      if (mark) return mark.attrs as MarkAttrs;
     }
   } catch {
     /* paragraph at start/end of doc */
@@ -558,8 +633,6 @@ export function createSuggestionModePlugin(initialActive = false, author = 'User
       const insertionType = newState.schema.marks.insertion;
       if (!insertionType) return null;
 
-      const markAttrs = makeMarkAttrs(pluginState);
-
       const tr = newState.tr;
       tr.setMeta(SUGGESTION_META, true);
 
@@ -568,6 +641,16 @@ export function createSuggestionModePlugin(initialActive = false, author = 'User
         const stepMap = step.getMap();
         stepMap.forEach((_oldFrom, _oldTo, newFrom, newTo) => {
           if (newTo > newFrom) {
+            // Reuse an adjacent same-author insertion when present so a
+            // paste right after typed text coalesces into one tracked change.
+            const markAttrs =
+              findAdjacentRevisionForRange(
+                newState.doc,
+                newFrom,
+                newTo,
+                'insertion',
+                pluginState.author
+              ) ?? makeMarkAttrs(pluginState);
             // Only mark text nodes that don't already have tracked change marks.
             // Marking the entire range would overwrite existing marks from other authors.
             newState.doc.nodesBetween(newFrom, newTo, (node, pos) => {
