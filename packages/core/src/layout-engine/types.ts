@@ -393,6 +393,11 @@ export type TableCell = {
    * — content stays on one line and the cell expands horizontally.
    */
   noWrap?: boolean;
+  /** Tracked cell marker (`<w:cellIns>` / `<w:cellDel>` / `<w:cellMerge>`) — painter colors the top border. */
+  trackedMarker?: {
+    kind: 'ins' | 'del' | 'merge';
+    info: import('../types/content/trackedChange').RevisionInfo;
+  };
 };
 
 /**
@@ -404,6 +409,9 @@ export type TableRow = {
   height?: number;
   heightRule?: 'auto' | 'atLeast' | 'exact';
   isHeader?: boolean;
+  /** Tracked row ins / del (`<w:trPr><w:ins/>` / `<w:del/>`). */
+  trackedIns?: import('../types/content/trackedChange').RevisionInfo;
+  /** see trackedIns */ trackedDel?: import('../types/content/trackedChange').RevisionInfo;
 };
 
 /**

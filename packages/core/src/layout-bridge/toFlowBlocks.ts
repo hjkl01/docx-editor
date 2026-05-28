@@ -394,6 +394,16 @@ function convertTableCell(
     left: resolveSide(margins?.left, tableCellMargins?.left),
   };
 
+  // Surface tracked-cell marker (cellIns / cellDel / cellMerge) so the
+  // painter can color the cell border. Same model as ParagraphAttrs.pPrIns.
+  const cellMarker = attrs.cellMarker as
+    | {
+        kind: 'ins' | 'del' | 'merge';
+        info: import('../types/content/trackedChange').RevisionInfo;
+      }
+    | null
+    | undefined;
+
   return {
     id: nextBlockId(),
     blocks,
@@ -407,6 +417,7 @@ function convertTableCell(
     borders: extractCellBorders(attrs as Record<string, unknown>, options.theme),
     padding,
     noWrap: (attrs.noWrap as boolean | undefined) || undefined,
+    trackedMarker: cellMarker ?? undefined,
   };
 }
 
@@ -436,6 +447,10 @@ function convertTableRow(
     height: attrs.height ? twipsToPixels(attrs.height as number) : undefined,
     heightRule: (attrs.heightRule as 'auto' | 'atLeast' | 'exact') ?? undefined,
     isHeader: attrs.isHeader as boolean | undefined,
+    trackedIns:
+      (attrs.trIns as import('../types/content/trackedChange').RevisionInfo | null) ?? undefined,
+    trackedDel:
+      (attrs.trDel as import('../types/content/trackedChange').RevisionInfo | null) ?? undefined,
   };
 }
 

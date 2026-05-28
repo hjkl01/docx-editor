@@ -301,6 +301,14 @@ test.describe('Tracked paragraph-mark revisions (issue #614)', () => {
     expect(rowAttrs?.trIns).toBeTruthy();
     expect((rowAttrs?.trIns as { revisionId: number }).revisionId).toBe(77);
 
+    // The PAINTER reads trIns from the layout model and applies the
+    // ep-revision-row class + data-revision-id on the visible row, so the
+    // green change bar shows up and the sidebar can anchor cards. Without
+    // this, only the hidden ProseMirror DOM would carry the tracking.
+    const paintedTrackedRow = page.locator('.layout-table-row.ep-revision-row[data-revision-id]');
+    await expect(paintedTrackedRow).toHaveCount(1);
+    expect(await paintedTrackedRow.getAttribute('data-revision-id')).toBe('77');
+
     // Accept clears the marker (Phase 2 round-trip semantic; full row-remove
     // semantics come with suggesting-aware commands).
     expect(await acceptById(page, 77)).toBe(true);

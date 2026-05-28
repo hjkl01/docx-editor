@@ -453,6 +453,20 @@ function renderTableCell(
   const cellEl = doc.createElement('div');
   cellEl.className = TABLE_CLASS_NAMES.cell;
 
+  // Tracked-cell marker — apply ep-revision-cell + kind class so the
+  // shared CSS (editor.css `.ep-revision-cell.ep-revision-ins`) renders
+  // a colored top border. data-revision-id lets the sidebar anchor cards
+  // to the painted node.
+  if (cell.trackedMarker) {
+    cellEl.classList.add('ep-revision-cell');
+    cellEl.classList.add(`ep-revision-${cell.trackedMarker.kind}`);
+    cellEl.dataset.revisionId = String(cell.trackedMarker.info.revisionId);
+    cellEl.dataset.revisionAuthor = cell.trackedMarker.info.author;
+    if (cell.trackedMarker.info.date) {
+      cellEl.dataset.revisionDate = cell.trackedMarker.info.date;
+    }
+  }
+
   // Positioning
   cellEl.style.position = 'absolute';
   cellEl.style.left = `${x}px`;
@@ -566,6 +580,18 @@ function renderTableRow(
 ): HTMLElement {
   const rowEl = doc.createElement('div');
   rowEl.className = TABLE_CLASS_NAMES.row;
+
+  // Tracked-row marker — same shape as the cell branch: ep-revision-row
+  // + kind class + data-revision-id so the painted row carries the green
+  // change bar (CSS in editor.css) and the sidebar can anchor to it.
+  const trackedRev = row.trackedIns ?? row.trackedDel;
+  if (trackedRev) {
+    rowEl.classList.add('ep-revision-row');
+    rowEl.classList.add(`ep-revision-${row.trackedIns ? 'ins' : 'del'}`);
+    rowEl.dataset.revisionId = String(trackedRev.revisionId);
+    rowEl.dataset.revisionAuthor = trackedRev.author;
+    if (trackedRev.date) rowEl.dataset.revisionDate = trackedRev.date;
+  }
 
   // Positioning
   rowEl.style.position = 'absolute';
