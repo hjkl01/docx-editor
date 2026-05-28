@@ -22,6 +22,7 @@ import type {
   ParagraphFormatting,
   ParagraphPropertyChange,
   TextFormatting,
+  TrackedChangeInfo,
 } from '../../types/document';
 
 import { serializeTextFormatting } from './runSerializer';
@@ -38,11 +39,70 @@ import {
 import { serializeParagraphContent } from './paragraphSerializer/content';
 
 /**
+ * Format a tracked-change attribute triple `(w:id, w:author, w:date)` for
+ * emission on any `CT_TrackChange` element. `w:date` is omitted when absent
+ * per schema (`use="optional"`).
+ */
+function serializeTrackedChangeAttrs(info: TrackedChangeInfo): string {
+  const normalizedId = Number.isInteger(info.id) && info.id >= 0 ? info.id : 0;
+  const author =
+    typeof info.author === 'string' && info.author.length > 0 ? info.author : 'Unknown';
+  const parts = [`w:id="${normalizedId}"`, `w:author="${escapeXml(author)}"`];
+  const date = typeof info.date === 'string' && info.date.length > 0 ? info.date : undefined;
+  if (date) parts.push(`w:date="${escapeXml(date)}"`);
+  return parts.join(' ');
+}
+
+/**
+ * Build the pPr/rPr element string for a paragraph, merging:
+ *   1. Paragraph-mark tracked-change markers (pPrIns / pPrDel) — emitted
+ *      FIRST inside w:rPr per EG_ParaRPrTrackChanges ordering (wml.xsd:1837).
+ *   2. Default run-properties from `formatting.runProperties`.
+ *
+ * Returns an empty string if neither side contributes anything. The result
+ * still includes the surrounding `<w:rPr>...</w:rPr>` wrapper when non-empty.
+ */
+function buildParagraphMarkRPr(
+  formatting: ParagraphFormatting | undefined,
+  pPrIns: TrackedChangeInfo | undefined,
+  pPrDel: TrackedChangeInfo | undefined
+): string {
+  const inner: string[] = [];
+  if (pPrIns) {
+    inner.push(`<w:ins ${serializeTrackedChangeAttrs(pPrIns)}/>`);
+  }
+  if (pPrDel) {
+    inner.push(`<w:del ${serializeTrackedChangeAttrs(pPrDel)}/>`);
+  }
+  if (formatting?.runProperties) {
+    const rPrXml = serializeTextFormatting(formatting.runProperties);
+    if (rPrXml) {
+      // serializeTextFormatting returns a wrapped `<w:rPr>...</w:rPr>`; strip
+      // the wrapper so we can append its children after our tracked-change
+      // elements while keeping the schema-mandated ordering (ins/del first).
+      if (rPrXml.startsWith('<w:rPr>') && rPrXml.endsWith('</w:rPr>')) {
+        const body = rPrXml.slice('<w:rPr>'.length, -'</w:rPr>'.length);
+        if (body.length > 0) inner.push(body);
+      } else if (rPrXml.startsWith('<w:rPr/>')) {
+        // empty — nothing to append
+      } else {
+        // Unexpected shape; emit as-is to avoid data loss.
+        inner.push(rPrXml);
+      }
+    }
+  }
+  if (inner.length === 0) return '';
+  return `<w:rPr>${inner.join('')}</w:rPr>`;
+}
+
+/**
  * Serialize paragraph formatting properties to w:pPr XML
  */
 export function serializeParagraphFormatting(
   formatting: ParagraphFormatting | undefined,
-  propertyChanges?: ParagraphPropertyChange[]
+  propertyChanges?: ParagraphPropertyChange[],
+  pPrIns?: TrackedChangeInfo,
+  pPrDel?: TrackedChangeInfo
 ): string {
   const parts: string[] = [];
 
@@ -142,14 +202,14 @@ export function serializeParagraphFormatting(
     if (formatting.outlineLevel !== undefined) {
       parts.push(`<w:outlineLvl w:val="${formatting.outlineLevel}"/>`);
     }
+  }
 
-    // Run properties (default run formatting for paragraph)
-    if (formatting.runProperties) {
-      const rPrXml = serializeTextFormatting(formatting.runProperties);
-      if (rPrXml) {
-        parts.push(rPrXml);
-      }
-    }
+  // Paragraph-mark rPr is built once at the end so tracked-change markers
+  // (pPrIns/pPrDel) come first inside <w:rPr> per EG_ParaRPrTrackChanges
+  // ordering, followed by any default run-properties from formatting.
+  const rPrXml = buildParagraphMarkRPr(formatting, pPrIns ?? undefined, pPrDel ?? undefined);
+  if (rPrXml) {
+    parts.push(rPrXml);
   }
 
   if (propertyChanges && propertyChanges.length > 0) {
@@ -209,7 +269,12 @@ export function serializeParagraph(paragraph: Paragraph): string {
   const attrsStr = attrs.length > 0 ? ' ' + attrs.join(' ') : '';
 
   // Add paragraph properties if present
-  const pPrXml = serializeParagraphFormatting(paragraph.formatting, paragraph.propertyChanges);
+  const pPrXml = serializeParagraphFormatting(
+    paragraph.formatting,
+    paragraph.propertyChanges,
+    paragraph.pPrIns,
+    paragraph.pPrDel
+  );
   if (pPrXml) {
     parts.push(pPrXml);
   }

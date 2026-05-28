@@ -23,6 +23,8 @@ import type { Node as PMNode, MarkType } from 'prosemirror-model';
 
 export const suggestionModeKey = new PluginKey<SuggestionModeState>('suggestionMode');
 const SUGGESTION_META = 'suggestionModeApplied';
+/** Set by accept/reject commands to bypass suggesting-mode interception. */
+export const SUGGESTION_BYPASS_META = 'suggestionModeBypass';
 
 interface SuggestionModeState {
   active: boolean;
@@ -43,6 +45,11 @@ function makeMarkAttrs(pluginState: SuggestionModeState): MarkAttrs {
     author: pluginState.author,
     date: new Date().toISOString(),
   };
+}
+
+/** Reserve a revision triple without applying it — used by Enter/Backspace handlers. */
+function makeRevisionInfo(pluginState: SuggestionModeState): MarkAttrs {
+  return makeMarkAttrs(pluginState);
 }
 
 /**
@@ -254,6 +261,202 @@ function handleSuggestionDelete(
 }
 
 /**
+ * Suggesting-mode Enter handler. Splits the paragraph (via the existing
+ * BaseKeymapExtension `splitBlockClearBorders` behavior, re-implemented
+ * inline so we can capture the resulting transaction and add a `pPrIns`
+ * attr on the *first* paragraph in the same PM transaction).
+ *
+ * Per ECMA-376 §17.13.5, the paragraph mark of the FIRST paragraph after
+ * a split is the one that was newly introduced. Reject of `pPrIns` joins
+ * the first paragraph back with the next; accept just clears the marker.
+ */
+function handleSuggestionEnter(
+  state: EditorState,
+  dispatch: ((tr: Transaction) => void) | undefined
+): boolean {
+  const pluginState = suggestionModeKey.getState(state);
+  if (!pluginState?.active) return false;
+
+  // Selection must be inside a paragraph (other block types fall through).
+  const { $from, $to } = state.selection;
+  if ($from.parent.type.name !== 'paragraph') return false;
+  if ($to.parent.type.name !== 'paragraph') return false;
+
+  if (!dispatch) return true;
+
+  // If the selection covers content, mark it as deletion first (existing
+  // suggesting-mode behavior) so the split happens at the selection start.
+  const insertionType = state.schema.marks.insertion;
+  const deletionType = state.schema.marks.deletion;
+  if (!insertionType || !deletionType) return false;
+
+  const tr = state.tr;
+  tr.setMeta(SUGGESTION_META, true);
+
+  if (!state.selection.empty) {
+    markRangeAsDeleted(tr, state.doc, $from.pos, $to.pos, insertionType, deletionType, pluginState);
+    // Collapse cursor to the deletion start before splitting.
+    const collapsePos = tr.mapping.map($from.pos);
+    tr.setSelection(TextSelection.near(tr.doc.resolve(collapsePos)));
+  }
+
+  // The first paragraph is the one whose mark just got introduced. We need
+  // its absolute position BEFORE the split to find it again after.
+  const $cursor = tr.selection.$from;
+  const firstParaStart = $cursor.before($cursor.depth);
+
+  // Split the paragraph at the cursor. PM's `split` creates a copy of the
+  // current node type with default attrs (matches splitBlockClearBorders'
+  // path for typed.split-able blocks).
+  const splitPos = tr.selection.from;
+  tr.split(splitPos, 1);
+
+  // Set pPrIns on the FIRST paragraph (the one before the split).
+  const firstPara = tr.doc.nodeAt(firstParaStart);
+  if (firstPara && firstPara.type.name === 'paragraph') {
+    const info = makeRevisionInfo(pluginState);
+    tr.setNodeMarkup(firstParaStart, undefined, {
+      ...firstPara.attrs,
+      pPrIns: info,
+    });
+  }
+
+  // Inherit style attrs from the source paragraph onto the new paragraph
+  // (mirrors `splitBlockClearBorders` minimal behavior — full implementation
+  // is in BaseKeymapExtension, but we can't reuse it here without losing the
+  // single-transaction guarantee).
+  const newParaStart = tr.mapping.map(firstParaStart) + (firstPara?.nodeSize ?? 0);
+  const newPara = tr.doc.nodeAt(newParaStart);
+  if (newPara && newPara.type.name === 'paragraph' && firstPara) {
+    const newAttrs = { ...newPara.attrs };
+    const INHERITED: Array<keyof typeof newAttrs> = [
+      'styleId',
+      'lineSpacing',
+      'lineSpacingRule',
+      'spaceAfter',
+      'spaceBefore',
+      'contextualSpacing',
+      'defaultTextFormatting',
+    ];
+    let changed = false;
+    for (const key of INHERITED) {
+      const src = firstPara.attrs[key as string];
+      if (src != null && newAttrs[key] == null) {
+        newAttrs[key] = src;
+        changed = true;
+      }
+    }
+    // Word does NOT propagate paragraph borders on Enter.
+    if (newAttrs.borders) {
+      newAttrs.borders = null;
+      changed = true;
+    }
+    // Clear any pPrIns/pPrDel that may have been copied by setNodeMarkup
+    // semantics (shouldn't happen since split uses defaults, but defensive).
+    if (newAttrs.pPrIns || newAttrs.pPrDel) {
+      newAttrs.pPrIns = null;
+      newAttrs.pPrDel = null;
+      changed = true;
+    }
+    if (changed) {
+      tr.setNodeMarkup(newParaStart, undefined, newAttrs);
+    }
+  }
+
+  dispatch(tr.scrollIntoView());
+  return true;
+}
+
+/**
+ * Suggesting-mode Backspace at the start of a non-first paragraph: set
+ * `pPrDel` on the PREVIOUS paragraph (its terminating mark is the one
+ * being eaten). Caret lands at the end of the previous paragraph.
+ *
+ * Returns false at the very start of the document (nothing to mark), so
+ * the base keymap can chain through (which itself is a no-op there).
+ */
+function handleSuggestionBackspaceAtStart(
+  state: EditorState,
+  dispatch: ((tr: Transaction) => void) | undefined
+): boolean {
+  const pluginState = suggestionModeKey.getState(state);
+  if (!pluginState?.active) return false;
+  const { $from, empty } = state.selection;
+  if (!empty) return false;
+  if ($from.parentOffset !== 0) return false;
+  if ($from.parent.type.name !== 'paragraph') return false;
+
+  const paraStart = $from.before($from.depth);
+  if (paraStart <= 0) return false; // first paragraph in the document
+  // `paraStart` is the position immediately before the current paragraph's
+  // open tag. `nodeBefore` at that position returns the previous sibling.
+  const prevPara = state.doc.resolve(paraStart).nodeBefore;
+  if (!prevPara || prevPara.type.name !== 'paragraph') return false;
+  // Already marked as deleted by the same author — second Backspace is a no-op.
+  if (prevPara.attrs.pPrDel) {
+    if (dispatch) {
+      const prevParaEnd = paraStart - 1;
+      const tr = state.tr.setSelection(TextSelection.near(state.doc.resolve(prevParaEnd)));
+      dispatch(tr);
+    }
+    return true;
+  }
+
+  if (!dispatch) return true;
+
+  const prevParaStart = paraStart - prevPara.nodeSize;
+  const info = makeRevisionInfo(pluginState);
+  const tr = state.tr.setNodeMarkup(prevParaStart, undefined, {
+    ...prevPara.attrs,
+    pPrDel: info,
+  });
+  tr.setMeta(SUGGESTION_META, true);
+  // Caret to end of previous paragraph.
+  const prevParaEnd = paraStart - 1;
+  tr.setSelection(TextSelection.near(tr.doc.resolve(prevParaEnd)));
+  dispatch(tr.scrollIntoView());
+  return true;
+}
+
+/**
+ * Suggesting-mode Delete at end of a non-last paragraph: set `pPrDel` on
+ * the CURRENT paragraph.
+ */
+function handleSuggestionDeleteAtEnd(
+  state: EditorState,
+  dispatch: ((tr: Transaction) => void) | undefined
+): boolean {
+  const pluginState = suggestionModeKey.getState(state);
+  if (!pluginState?.active) return false;
+  const { $from, empty } = state.selection;
+  if (!empty) return false;
+  if ($from.parent.type.name !== 'paragraph') return false;
+  if ($from.parentOffset !== $from.parent.content.size) return false;
+
+  const para = $from.parent;
+  const paraStart = $from.before($from.depth);
+  const paraEnd = paraStart + para.nodeSize;
+  if (paraEnd >= state.doc.content.size) return false; // last paragraph
+  const $afterPara = state.doc.resolve(paraEnd);
+  const nextPara = $afterPara.nodeAfter;
+  if (!nextPara || nextPara.type.name !== 'paragraph') return false;
+  if (para.attrs.pPrDel) {
+    return true; // already marked
+  }
+
+  if (!dispatch) return true;
+
+  const info = makeRevisionInfo(pluginState);
+  const tr = state.tr.setNodeMarkup(paraStart, undefined, {
+    ...para.attrs,
+    pPrDel: info,
+  });
+  tr.setMeta(SUGGESTION_META, true);
+  dispatch(tr.scrollIntoView());
+  return true;
+}
+
+/**
  * Create the suggestion mode plugin.
  * When active, text edits become tracked changes.
  */
@@ -293,15 +496,23 @@ export function createSuggestionModePlugin(initialActive = false, author = 'User
           return false;
         },
       },
-      // Intercept Backspace and Delete to mark as deletion
+      // Intercept Backspace and Delete to mark as deletion.
+      // Enter splits the paragraph and marks the FIRST paragraph's pPrIns.
       handleKeyDown(view: EditorView, event: KeyboardEvent): boolean {
         const pluginState = suggestionModeKey.getState(view.state);
         if (!pluginState?.active) return false;
 
+        if (event.key === 'Enter' && !event.shiftKey) {
+          return handleSuggestionEnter(view.state, view.dispatch);
+        }
         if (event.key === 'Backspace') {
+          // At paragraph start (non-first paragraph), track the pilcrow
+          // deletion instead of joining or deleting a character.
+          if (handleSuggestionBackspaceAtStart(view.state, view.dispatch)) return true;
           return handleSuggestionDelete(view.state, view.dispatch, 'backward');
         }
         if (event.key === 'Delete') {
+          if (handleSuggestionDeleteAtEnd(view.state, view.dispatch)) return true;
           return handleSuggestionDelete(view.state, view.dispatch, 'forward');
         }
         return false;

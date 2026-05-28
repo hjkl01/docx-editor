@@ -79,6 +79,22 @@ export function convertPMParagraph(node: PMNode, documentCounts?: TrackedChangeC
     paragraph.renderedPageBreakBefore = true;
   }
 
+  // Round-trip paragraph-mark tracked-change attrs.
+  if (attrs.pPrIns) {
+    paragraph.pPrIns = {
+      id: attrs.pPrIns.revisionId,
+      author: attrs.pPrIns.author,
+      ...(attrs.pPrIns.date ? { date: attrs.pPrIns.date } : {}),
+    };
+  }
+  if (attrs.pPrDel) {
+    paragraph.pPrDel = {
+      id: attrs.pPrDel.revisionId,
+      author: attrs.pPrDel.author,
+      ...(attrs.pPrDel.date ? { date: attrs.pPrDel.date } : {}),
+    };
+  }
+
   // Restore full section properties (round-trip) or fallback to break type only
   if (attrs._sectionProperties) {
     paragraph.sectionProperties =

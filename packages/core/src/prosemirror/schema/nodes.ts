@@ -133,6 +133,22 @@ export interface ParagraphAttrs {
   /** Full section properties for paragraphs that end a section.
    *  Used by layout engine for per-section column/page config and round-trip. */
   _sectionProperties?: SectionProperties;
+
+  /**
+   * Paragraph-mark insertion tracking (`<w:pPr><w:rPr><w:ins/>`). Carries
+   * the OOXML tracked-change triple `(w:id, w:author, w:date)` when the
+   * pilcrow terminating this paragraph was added as a tracked change.
+   * `date` is ISO 8601 UTC with `Z` suffix; `null` if the source DOCX
+   * omitted `w:date`. Reject joins this paragraph with the following one.
+   */
+  pPrIns?: { revisionId: number; author: string; date: string | null } | null;
+
+  /**
+   * Paragraph-mark deletion tracking (`<w:pPr><w:rPr><w:del/>`). Same
+   * shape and provenance as `pPrIns`. Accept joins this paragraph with
+   * the following one; reject clears the marker, keeping the split.
+   */
+  pPrDel?: { revisionId: number; author: string; date: string | null } | null;
 }
 
 /**

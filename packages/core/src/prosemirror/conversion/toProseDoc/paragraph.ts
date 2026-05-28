@@ -328,6 +328,22 @@ function paragraphFormattingToAttrs(
     attrs.renderedPageBreakBefore = true;
   }
 
+  // Paragraph-mark tracked-change attrs (w:pPr/w:rPr/w:ins, w:del).
+  if (paragraph.pPrIns) {
+    attrs.pPrIns = {
+      revisionId: paragraph.pPrIns.id,
+      author: paragraph.pPrIns.author,
+      date: paragraph.pPrIns.date ?? null,
+    };
+  }
+  if (paragraph.pPrDel) {
+    attrs.pPrDel = {
+      revisionId: paragraph.pPrDel.id,
+      author: paragraph.pPrDel.author,
+      date: paragraph.pPrDel.date ?? null,
+    };
+  }
+
   return attrs;
 }
 

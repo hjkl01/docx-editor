@@ -294,6 +294,10 @@ const paragraphNodeSpec: NodeSpec = {
     bookmarks: { default: null },
     _originalFormatting: { default: null },
     _sectionProperties: { default: null },
+    // Tracked structural revisions on the paragraph mark itself.
+    // See ECMA-376 §17.13.5 — w:ins / w:del inside w:pPr/w:rPr.
+    pPrIns: { default: null },
+    pPrDel: { default: null },
   },
   parseDOM: [
     {
@@ -377,6 +381,16 @@ const paragraphNodeSpec: NodeSpec = {
     if (attrs.sectionBreakType) {
       domAttrs['data-section-break'] = attrs.sectionBreakType;
       domAttrs.class = (domAttrs.class ? domAttrs.class + ' ' : '') + 'docx-section-break';
+    }
+
+    if (attrs.pPrIns || attrs.pPrDel) {
+      const rev = attrs.pPrIns ?? attrs.pPrDel!;
+      const kindClass = attrs.pPrIns ? 'ep-revision-ins' : 'ep-revision-del';
+      domAttrs.class =
+        (domAttrs.class ? domAttrs.class + ' ' : '') + 'ep-revision-pmark ' + kindClass;
+      domAttrs['data-revision-id'] = String(rev.revisionId);
+      domAttrs['data-revision-author'] = rev.author;
+      if (rev.date) domAttrs['data-revision-date'] = rev.date;
     }
 
     return ['p', domAttrs, 0];
