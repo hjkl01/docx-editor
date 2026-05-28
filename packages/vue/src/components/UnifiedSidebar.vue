@@ -68,6 +68,8 @@
             @click="toggleExpanded(item.id)"
             @accept="(from: number, to: number) => $emit('accept-change', from, to)"
             @reject="(from: number, to: number) => $emit('reject-change', from, to)"
+            @accept-by-id="(rev: number) => $emit('accept-change-by-id', rev)"
+            @reject-by-id="(rev: number) => $emit('reject-change-by-id', rev)"
             @reply="(rev: number, text: string) => $emit('tracked-change-reply', rev, text)"
           />
         </div>
@@ -130,6 +132,9 @@ const emit = defineEmits<{
   (e: 'comment-delete', commentId: number): void;
   (e: 'accept-change', from: number, to: number): void;
   (e: 'reject-change', from: number, to: number): void;
+  /** For paragraph-mark and other structural revisions — accept/reject by w:id. */
+  (e: 'accept-change-by-id', revisionId: number): void;
+  (e: 'reject-change-by-id', revisionId: number): void;
   (e: 'tracked-change-reply', revisionId: number, text: string): void;
   (e: 'update:activeItemId', id: string | null): void;
 }>();

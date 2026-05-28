@@ -278,6 +278,8 @@
             @comment-delete="handleCommentDelete"
             @accept-change="handleAcceptChange"
             @reject-change="handleRejectChange"
+            @accept-change-by-id="handleAcceptChangeById"
+            @reject-change-by-id="handleRejectChangeById"
             @tracked-change-reply="handleTrackedChangeReply"
             @update:active-item-id="(id: string | null) => (activeSidebarItem = id)"
           />
@@ -791,6 +793,8 @@ const {
   handleCommentDelete,
   handleAcceptChange,
   handleRejectChange,
+  handleAcceptChangeById,
+  handleRejectChangeById,
   handleTrackedChangeReply,
 } = useCommentManagement({
   editorView,

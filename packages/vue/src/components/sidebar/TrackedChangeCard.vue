@@ -18,18 +18,10 @@
         <div v-if="change.date" class="tc-card__date">{{ formatDate(change.date) }}</div>
       </div>
       <div v-if="expanded" class="tc-card__actions">
-        <button
-          class="tc-card__icon-btn"
-          title="Accept"
-          @click.stop="$emit('accept', change.from, change.to)"
-        >
+        <button class="tc-card__icon-btn" title="Accept" @click.stop="onAccept">
           <MaterialSymbol name="check" :size="20" />
         </button>
-        <button
-          class="tc-card__icon-btn"
-          title="Reject"
-          @click.stop="$emit('reject', change.from, change.to)"
-        >
+        <button class="tc-card__icon-btn" title="Reject" @click.stop="onReject">
           <MaterialSymbol name="close" :size="20" />
         </button>
       </div>
@@ -41,6 +33,12 @@
         <span class="tc-card__deleted">&quot;{{ truncateText(change.deletedText || '') }}&quot;</span>
         with
         <span class="tc-card__inserted">&quot;{{ truncateText(change.text) }}&quot;</span>
+      </template>
+      <template v-else-if="change.type === 'paragraphMarkInsertion'">
+        Inserted paragraph break<template v-if="change.text">: <span class="tc-card__inserted">&quot;{{ truncateText(change.text) }}&quot;</span></template>
+      </template>
+      <template v-else-if="change.type === 'paragraphMarkDeletion'">
+        Deleted paragraph break<template v-if="change.text">: <span class="tc-card__deleted">&quot;{{ truncateText(change.text) }}&quot;</span></template>
       </template>
       <template v-else>
         {{ change.type === 'insertion' ? 'Added' : 'Deleted' }}
@@ -72,14 +70,32 @@ const props = defineProps<{
   expanded: boolean;
 }>();
 
-defineEmits<{
+const emit = defineEmits<{
   (e: 'click'): void;
   (e: 'accept', from: number, to: number): void;
   (e: 'reject', from: number, to: number): void;
+  (e: 'accept-by-id', revisionId: number): void;
+  (e: 'reject-by-id', revisionId: number): void;
   (e: 'reply', revisionId: number, text: string): void;
 }>();
 
 const authorName = computed(() => props.change.author || 'Unknown');
+
+const isParagraphMark = computed(
+  () =>
+    props.change.type === 'paragraphMarkInsertion' ||
+    props.change.type === 'paragraphMarkDeletion'
+);
+
+function onAccept() {
+  if (isParagraphMark.value) emit('accept-by-id', props.change.revisionId);
+  else emit('accept', props.change.from, props.change.to);
+}
+
+function onReject() {
+  if (isParagraphMark.value) emit('reject-by-id', props.change.revisionId);
+  else emit('reject', props.change.from, props.change.to);
+}
 </script>
 
 <style scoped>

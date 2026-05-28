@@ -115,11 +115,17 @@ export function extractTrackedChanges(state: EditorState | null): TrackedChanges
     }
   });
 
-  // Merge adjacent entries with the same revisionId and type into one
+  // Merge adjacent entries with the same revisionId and type into one.
+  // Restricted to INLINE types (insertion / deletion) — paragraph-mark entries
+  // use the whole-paragraph range, and two consecutive paragraphs sharing a
+  // revision triple (legal in OOXML for a multi-paragraph insertion applied
+  // under one id) must stay as distinct sidebar rows.
   const merged: TrackedChangeEntry[] = [];
   for (const entry of raw) {
     const last = merged[merged.length - 1];
+    const isInlineType = entry.type === 'insertion' || entry.type === 'deletion';
     if (
+      isInlineType &&
       last &&
       last.revisionId === entry.revisionId &&
       last.type === entry.type &&
