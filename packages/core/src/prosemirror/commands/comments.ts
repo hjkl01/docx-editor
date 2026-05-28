@@ -105,6 +105,16 @@ function resolveChange(from: number, to: number, mode: 'accept' | 'reject'): Com
  * Accept a tracked change at the given range.
  * - Insertion: remove mark, keep text
  * - Deletion: remove mark AND text
+ *
+ * Use {@link acceptChangeById} when accepting a coalesced revision —
+ * a single editing session can scatter sites across multiple paragraphs
+ * and only the by-id resolver walks every site.
+ *
+ * @example
+ * ```ts
+ * import { acceptChange } from '@eigenpal/docx-editor-core/prosemirror/commands';
+ * acceptChange(from, to)(view.state, view.dispatch);
+ * ```
  */
 export function acceptChange(from: number, to: number): Command {
   return resolveChange(from, to, 'accept');
@@ -114,6 +124,8 @@ export function acceptChange(from: number, to: number): Command {
  * Reject a tracked change at the given range.
  * - Insertion: remove mark AND text
  * - Deletion: remove mark, keep text
+ *
+ * Use {@link rejectChangeById} when rejecting a coalesced revision.
  */
 export function rejectChange(from: number, to: number): Command {
   return resolveChange(from, to, 'reject');
@@ -182,9 +194,19 @@ function collectAllRevisionIds(state: EditorState): number[] {
 }
 
 /**
- * Accept all tracked changes in the document — inline marks AND structural
- * revisions (paragraph-mark, row, cell, property changes). Returns the
- * count of distinct revision ids resolved.
+ * Accept every tracked change in the document — inline marks plus
+ * structural revisions (paragraph-mark, row, cell, property changes).
+ *
+ * Dispatches one transaction per distinct `revisionId` so each revision
+ * remains individually undoable. The acceptance order follows document
+ * order; later transactions read fresh state and skip ids whose sites
+ * were already removed.
+ *
+ * @example
+ * ```ts
+ * import { acceptAllChanges } from '@eigenpal/docx-editor-core/prosemirror/commands';
+ * acceptAllChanges()(view.state, view.dispatch);
+ * ```
  */
 export function acceptAllChanges(): Command {
   return (state, dispatch) => {
@@ -234,7 +256,13 @@ interface ChangeRange {
 }
 
 /**
- * Find the next tracked change after the given position.
+ * Find the next tracked-change range (inline insertion / deletion mark)
+ * after `startPos`. Wraps to the document start when no later change is
+ * found. Useful for "next change" / "previous change" toolbar buttons.
+ *
+ * Only walks inline marks — structural revisions (pPrIns / pPrDel / row
+ * / cell) are not surfaced here. Use {@link extractTrackedChanges} for a
+ * complete revision list.
  */
 export function findNextChange(state: EditorState, startPos: number): ChangeRange | null {
   const insertionType = state.schema.marks.insertion;
@@ -758,24 +786,44 @@ function resolveById(revisionId: number, mode: 'accept' | 'reject'): Command {
 }
 
 /**
- * Accept any revision in the document by its `w:id`. Resolves every site
- * sharing the id (paragraph-mark attrs and inline marks) in a single PM
- * transaction. Returns false (no-op) if the id is not present.
+ * Accept every site of a tracked revision in one PM transaction. Walks
+ * the doc for all sites carrying `revisionId` — inline insertion/
+ * deletion marks, paragraph-mark `pPrIns` / `pPrDel`, paragraph
+ * property changes, table row / cell / table revisions — and applies
+ * the accept semantics each requires.
+ *
+ * This is the right command for any coalesced revision (Enter chains,
+ * replace pairs, multi-paragraph runs) because one editing session can
+ * scatter sites across the doc; the range-based {@link acceptChange}
+ * only clears sites within its `(from, to)`.
+ *
+ * Returns `false` (no-op) if the id is not present.
+ *
+ * @example
+ * ```ts
+ * import { acceptChangeById } from '@eigenpal/docx-editor-core/prosemirror/commands';
+ * acceptChangeById(revisionId)(view.state, view.dispatch);
+ * ```
  */
 export function acceptChangeById(revisionId: number): Command {
   return resolveById(revisionId, 'accept');
 }
 
 /**
- * Reject any revision in the document by its `w:id`. Inverse of accept
- * per the Word semantics table in the spec.
+ * Reject every site of a tracked revision in one PM transaction.
+ * Inverse of {@link acceptChangeById} — inserts are removed, deletions
+ * keep their text, paragraph-mark insertions join paragraphs back,
+ * paragraph-mark deletions stay split, paragraph property changes
+ * restore prior values, and tracked row insertions are removed.
  */
 export function rejectChangeById(revisionId: number): Command {
   return resolveById(revisionId, 'reject');
 }
 
 /**
- * Find the previous tracked change before the given position.
+ * Find the previous tracked-change range (inline insertion / deletion
+ * mark) before `startPos`. Wraps to the document end when no earlier
+ * change is found. Counterpart to {@link findNextChange}.
  */
 export function findPreviousChange(state: EditorState, startPos: number): ChangeRange | null {
   const insertionType = state.schema.marks.insertion;

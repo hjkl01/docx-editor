@@ -826,14 +826,10 @@
     "cellPropertiesChanged": null,
     "paragraphMarkDeleted": null,
     "paragraphMarkInserted": null,
-    "paragraphMarkPropertiesChanged": null,
     "paragraphPropertiesChanged": null,
     "rowDeleted": null,
     "rowInserted": null,
     "rowPropertiesChanged": null,
-    "runPropertiesChanged": null,
-    "sectionPropertiesChanged": null,
-    "tableGridChanged": null,
     "tablePropertiesChanged": null
   }
 }

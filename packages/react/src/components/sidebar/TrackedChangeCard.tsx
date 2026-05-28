@@ -11,10 +11,25 @@ import { useTranslation } from '../../i18n';
 export interface TrackedChangeCardProps extends SidebarItemRenderProps {
   change: TrackedChangeEntry;
   replies: Comment[];
+  /**
+   * @deprecated Prefer `onAcceptById`. Range-based accept only clears
+   * marks within `(from, to)` and silently leaves paragraph-mark and
+   * coalesced sibling sites behind. Kept as fallback for hosts that
+   * haven't migrated to the by-id channel.
+   */
   onAccept?: (from: number, to: number) => void;
+  /**
+   * @deprecated Prefer `onRejectById`. Same caveat as `onAccept`.
+   */
   onReject?: (from: number, to: number) => void;
-  /** For paragraph-mark entries — accept/reject by `w:id`. */
+  /**
+   * Accept every site of the revision. Walks the doc for all sites
+   * sharing the `revisionId` (inline marks + paragraph attrs + table
+   * row/cell attrs) and clears them in one transaction. This is the
+   * right channel for any coalesced revision.
+   */
   onAcceptById?: (revisionId: number) => void;
+  /** Reject every site of the revision. Counterpart to `onAcceptById`. */
   onRejectById?: (revisionId: number) => void;
   onReply?: (revisionId: number, text: string) => void;
 }

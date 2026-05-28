@@ -6,23 +6,25 @@
  * for replace ops).
  *
  * Pure function — no React, no Vue, no side effects. Single O(N) walk
- * over text nodes. Lifted from packages/react/src/hooks/useTrackedChanges.ts
- * so both adapters can call it directly.
- *
- * @remarks
- * Tagged `@internal` post-1.0 cut. Both adapters re-export this through
- * their own composables (`useTrackedChanges`); consumers should prefer
- * those. The subpath stays in `package.json` `exports` for back-compat;
- * expect it to move behind a public surface in a future major.
+ * over text nodes. Consumers building custom sidebars should prefer the
+ * adapter-specific wrappers (`useTrackedChanges` in
+ * `@eigenpal/docx-editor-react/hooks` and
+ * `@eigenpal/docx-editor-vue/composables`), which add the memoization
+ * and reactivity layer. Reach for the core function directly for
+ * server-side analysis or test fixtures.
  *
  * @packageDocumentation
- * @internal
+ * @public
  */
 import type { EditorState } from 'prosemirror-state';
 import type { Mark } from 'prosemirror-model';
 import type { TrackedChangeEntry } from '../../utils/comments';
 
-/** @internal */
+/**
+ * Output of {@link extractTrackedChanges}.
+ *
+ * @public
+ */
 export interface TrackedChangesResult {
   /** Tracked-change entries, sorted by document position, with adjacent same-revision entries merged. */
   entries: TrackedChangeEntry[];
@@ -38,7 +40,30 @@ const EMPTY_RESULT: TrackedChangesResult = {
   commentToRevision: new Map(),
 };
 
-/** @internal */
+/**
+ * Walk the PM doc and extract every tracked change as a flat list of
+ * `TrackedChangeEntry` plus a comment→revision overlap map. Adjacent
+ * inline marks coalesce by `(type, revisionId, author, date)`; a
+ * deletion immediately followed by an insertion (same author + same
+ * date) collapses into a single `replacement` entry; paragraph-mark
+ * cards (`paragraphMarkInsertion` / `paragraphMarkDeletion`) are
+ * hidden when an inline entry already covers their revision triple
+ * (one Accept clears every site of one conceptual change).
+ *
+ * Pure and deterministic. Returns `EMPTY_RESULT` on null state.
+ *
+ * @example
+ * ```ts
+ * import { extractTrackedChanges } from '@eigenpal/docx-editor-core/prosemirror/utils/extractTrackedChanges';
+ *
+ * const { entries, commentToRevision } = extractTrackedChanges(view.state);
+ * for (const e of entries) {
+ *   console.log(e.type, e.author, e.text);
+ * }
+ * ```
+ *
+ * @public
+ */
 export function extractTrackedChanges(state: EditorState | null): TrackedChangesResult {
   if (!state) return EMPTY_RESULT;
   const { doc, schema } = state;

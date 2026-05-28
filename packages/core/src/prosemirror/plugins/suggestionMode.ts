@@ -564,8 +564,29 @@ function handleSuggestionDeleteAtEnd(
 }
 
 /**
- * Create the suggestion mode plugin.
- * When active, text edits become tracked changes.
+ * Create the suggestion-mode ProseMirror plugin. **Must be mounted on
+ * the editor view for {@link setSuggestionMode} and
+ * {@link toggleSuggestionMode} to do anything** — both adapters
+ * (`@eigenpal/docx-editor-react`, `@eigenpal/docx-editor-vue`) auto-mount
+ * this inside the `DocxEditor` component, so consumers using the bundled
+ * components don't need to register it themselves.
+ *
+ * When active, typed text gets the `insertion` mark, deleted text gets
+ * the `deletion` mark (text stays in the doc; the painter strikes it
+ * through), Enter sets `pPrIns` on the originating paragraph, and
+ * Backspace at paragraph start sets `pPrDel` on the previous paragraph.
+ * Author + adjacent same-author marks coalesce into one tracked change.
+ *
+ * @param initialActive - Whether suggesting mode starts on. Default `false`.
+ * @param author - Author name attached to every minted revision. Default `'User'`.
+ *
+ * @example
+ * ```ts
+ * import { createSuggestionModePlugin } from '@eigenpal/docx-editor-core/prosemirror/plugins';
+ *
+ * const plugin = createSuggestionModePlugin(false, 'Jane');
+ * EditorState.create({ doc, plugins: [plugin, ...other] });
+ * ```
  */
 export function createSuggestionModePlugin(initialActive = false, author = 'User'): Plugin {
   return new Plugin({
@@ -693,7 +714,15 @@ export function createSuggestionModePlugin(initialActive = false, author = 'User
 }
 
 /**
- * Toggle suggestion mode on/off.
+ * Toggle suggesting mode on/off. The mounted {@link createSuggestionModePlugin}
+ * is required for the dispatch to have any effect — without it the meta
+ * is silently dropped. Returns `false` (no-op) if the plugin is missing.
+ *
+ * @example
+ * ```ts
+ * import { toggleSuggestionMode } from '@eigenpal/docx-editor-core/prosemirror/plugins';
+ * toggleSuggestionMode(view.state, view.dispatch);
+ * ```
  */
 export function toggleSuggestionMode(
   state: EditorState,
@@ -712,7 +741,17 @@ export function toggleSuggestionMode(
 }
 
 /**
- * Set suggestion mode active state and author.
+ * Set suggesting mode active state and (optionally) author. Author
+ * tracks across every revision minted while the mode is on. The
+ * mounted {@link createSuggestionModePlugin} is required.
+ *
+ * @example
+ * ```ts
+ * import { setSuggestionMode } from '@eigenpal/docx-editor-core/prosemirror/plugins';
+ * setSuggestionMode(true, view.state, view.dispatch, 'Jane');
+ * // ... typed text now wraps in <w:ins> with author="Jane"
+ * setSuggestionMode(false, view.state, view.dispatch);
+ * ```
  */
 export function setSuggestionMode(
   active: boolean,

@@ -554,9 +554,6 @@
     "paragraphMarkInserted": "Inserted paragraph break",
     "paragraphMarkDeleted": "Deleted paragraph break",
     "paragraphPropertiesChanged": "Changed paragraph properties",
-    "paragraphMarkPropertiesChanged": "Changed paragraph mark formatting",
-    "sectionPropertiesChanged": "Changed section properties",
-    "runPropertiesChanged": "Changed text formatting",
     "rowInserted": "Inserted row",
     "rowDeleted": "Deleted row",
     "rowPropertiesChanged": "Changed row properties",
@@ -564,8 +561,7 @@
     "cellDeleted": "Deleted cell",
     "cellMerged": "Merged cells",
     "cellPropertiesChanged": "Changed cell properties",
-    "tablePropertiesChanged": "Changed table properties",
-    "tableGridChanged": "Changed table grid"
+    "tablePropertiesChanged": "Changed table properties"
   },
   "contextMenu": {
     "ariaLabel": "AI actions menu",
