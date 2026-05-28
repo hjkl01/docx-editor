@@ -80,6 +80,10 @@ declare global {
       plantSimpleTable: () => boolean;
       plantTableRowInsertion: (revisionId: number) => boolean;
       getFirstTableRowAttrs: () => Record<string, unknown> | null;
+      countTableRows: () => number;
+      focusFirstTableCell: () => boolean;
+      addRowBelow: () => boolean;
+      deleteCurrentRow: () => boolean;
     };
   }
 }

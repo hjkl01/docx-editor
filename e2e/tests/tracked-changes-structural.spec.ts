@@ -298,6 +298,93 @@ test.describe('Tracked paragraph-mark revisions (issue #614)', () => {
     expect(afterAttrs?.trIns).toBeNull();
   });
 
+  test('addRowBelow in suggesting mode tracks the new row via trIns', async ({ page }) => {
+    await page.evaluate(() => window.__DOCX_EDITOR_E2E__?.plantSimpleTable?.());
+    expect(await page.evaluate(() => window.__DOCX_EDITOR_E2E__?.countTableRows?.() ?? 0)).toBe(1);
+
+    expect(await setSuggestionMode(page, true, 'Jane')).toBe(true);
+    expect(await page.evaluate(() => window.__DOCX_EDITOR_E2E__?.focusFirstTableCell?.())).toBe(
+      true
+    );
+
+    expect(await page.evaluate(() => window.__DOCX_EDITOR_E2E__?.addRowBelow?.())).toBe(true);
+    await page.waitForTimeout(50);
+
+    // Now 2 rows. The new row (index 0 — well, actually below the first
+    // means it's row index 1) should carry `trIns`.
+    expect(await page.evaluate(() => window.__DOCX_EDITOR_E2E__?.countTableRows?.() ?? 0)).toBe(2);
+
+    // Read all row attrs. The NEW row is the one carrying trIns.
+    const newRowInfo = await page.evaluate(() => {
+      const view = (
+        document.querySelector('[data-testid="docx-editor"]') as HTMLElement | null
+      )?.querySelector('.ProseMirror');
+      // Walk via the public API
+      const found: { revisionId: number; author: string } | null = null;
+      const hook = window.__DOCX_EDITOR_E2E__;
+      // We have getFirstTableRowAttrs but not all-rows; grab the row index 1
+      // attrs through a manual descend.
+      if (!hook) return null;
+      // Manual walk in evaluate context
+      void view; // unused locally; we use the editor ref via the global hook
+      // Use a fallback that picks any row carrying trIns
+      const attrs1 = hook.getFirstTableRowAttrs?.();
+      // Adapt: getFirstTableRowAttrs returns first row, which may be the
+      // original. The new-row trIns lives on the second row. For the test,
+      // we use the existing accept-by-id by extracting from extracted
+      // tracked changes — but easier: simply assert via PM walk.
+      void attrs1;
+      const w = window as unknown as {
+        __DOCX_EDITOR_E2E__?: { getParagraphAttrs?: (i: number) => Record<string, unknown> | null };
+      };
+      void w;
+      // Re-implement via direct PM walk:
+      const rootEl = document.querySelector('.ProseMirror');
+      void rootEl;
+      return found;
+    });
+    void newRowInfo;
+
+    // Find the revision id by reading the DOM data-revision-id from the
+    // painted/PM-rendered row (toDOM emits it on tr).
+    const trIns = page.locator('tr[data-revision-id]').first();
+    await expect(trIns).toBeVisible();
+    const revIdStr = await trIns.getAttribute('data-revision-id');
+    const revId = parseInt(revIdStr ?? '', 10);
+    expect(Number.isFinite(revId)).toBe(true);
+
+    // Accept clears the marker, keeping the row in place.
+    expect(await acceptById(page, revId)).toBe(true);
+    await page.waitForTimeout(50);
+    expect(await page.evaluate(() => window.__DOCX_EDITOR_E2E__?.countTableRows?.() ?? 0)).toBe(2);
+    await expect(page.locator('tr[data-revision-id]')).toHaveCount(0);
+  });
+
+  test('deleteRow in suggesting mode marks the row via trDel without removing it', async ({
+    page,
+  }) => {
+    // Build a 2-row table so deleteRow has something to delete (it requires
+    // rowCount > 1).
+    await page.evaluate(() => window.__DOCX_EDITOR_E2E__?.plantSimpleTable?.());
+    await setSuggestionMode(page, false); // ensure addRow doesn't track
+    await page.evaluate(() => window.__DOCX_EDITOR_E2E__?.focusFirstTableCell?.());
+    await page.evaluate(() => window.__DOCX_EDITOR_E2E__?.addRowBelow?.());
+    await page.waitForTimeout(30);
+    expect(await page.evaluate(() => window.__DOCX_EDITOR_E2E__?.countTableRows?.() ?? 0)).toBe(2);
+
+    // Now turn on suggesting mode and delete the focused row. The row
+    // should STAY (clear-only-on-accept Phase 2) but carry trDel.
+    await setSuggestionMode(page, true, 'Jane');
+    await page.evaluate(() => window.__DOCX_EDITOR_E2E__?.focusFirstTableCell?.());
+    expect(await page.evaluate(() => window.__DOCX_EDITOR_E2E__?.deleteCurrentRow?.())).toBe(true);
+    await page.waitForTimeout(50);
+
+    expect(await page.evaluate(() => window.__DOCX_EDITOR_E2E__?.countTableRows?.() ?? 0)).toBe(2);
+    const trDel = page.locator('tr.ep-revision-del').first();
+    await expect(trDel).toBeVisible();
+    expect(await trDel.getAttribute('data-revision-author')).toBe('Jane');
+  });
+
   test('Sidebar surfaces a paragraph-mark revision card with accept/reject', async ({ page }) => {
     await editor.typeText('Hello world');
     await editor.selectRange(0, 0, 5);

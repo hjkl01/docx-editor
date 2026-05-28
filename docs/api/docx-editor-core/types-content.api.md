@@ -727,6 +727,8 @@ export interface TableStructuralChangeInfo {
     info: TrackedChangeInfo;
     // (undocumented)
     type: 'tableRowInsertion' | 'tableRowDeletion' | 'tableCellInsertion' | 'tableCellDeletion' | 'tableCellMerge';
+    vMerge?: 'rest' | 'cont';
+    vMergeOrig?: 'rest' | 'cont';
 }
 
 // @public

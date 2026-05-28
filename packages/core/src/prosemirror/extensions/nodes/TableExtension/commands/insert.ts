@@ -13,6 +13,48 @@ import type { Node as PMNode, Schema } from 'prosemirror-model';
 import { type Command, type EditorState, type Transaction, TextSelection } from 'prosemirror-state';
 import { getTableContext } from '../context';
 import { buildCellAttrsFromTemplate } from './helpers';
+import { suggestionModeKey } from '../../../../plugins/suggestionMode';
+
+let nextRevisionId = Date.now() + 200000;
+
+function makeSuggestionInfo(state: EditorState): {
+  revisionId: number;
+  author: string;
+  date: string | null;
+} | null {
+  const pluginState = suggestionModeKey.getState(state);
+  if (!pluginState?.active) return null;
+  return {
+    revisionId: nextRevisionId++,
+    author: pluginState.author,
+    date: new Date().toISOString(),
+  };
+}
+
+/**
+ * Build a tracked-row-insertion row + cells. Caller decides where to insert.
+ */
+function buildSuggestingRow(
+  schema: Schema,
+  templateRow: PMNode,
+  info: { revisionId: number; author: string; date: string | null }
+): PMNode {
+  const cells: PMNode[] = [];
+  templateRow.forEach((cell) => {
+    const paragraph = schema.nodes.paragraph.create();
+    const baseAttrs = buildCellAttrsFromTemplate(cell);
+    const cellWithMarker = { ...baseAttrs, cellMarker: { kind: 'ins' as const, info } };
+    cells.push(schema.nodes.tableCell.create(cellWithMarker, paragraph));
+  });
+  return schema.nodes.tableRow.create(
+    {
+      height: templateRow.attrs.height ?? 360,
+      heightRule: templateRow.attrs.heightRule ?? 'atLeast',
+      trIns: info,
+    },
+    cells
+  );
+}
 
 /**
  * Build a fresh table node with the given dimensions and border color.
@@ -154,19 +196,25 @@ export function makeAddRowAbove(schema: Schema): Command {
     if (dispatch) {
       const tr = state.tr;
       const rowNode = context.table.child(context.rowIndex);
-      const cells: PMNode[] = [];
-      rowNode.forEach((cell) => {
-        const paragraph = schema.nodes.paragraph.create();
-        const cellAttrs = buildCellAttrsFromTemplate(cell);
-        cells.push(schema.nodes.tableCell.create(cellAttrs, paragraph));
-      });
-      const newRow = schema.nodes.tableRow.create(
-        {
-          height: rowNode.attrs.height ?? 360,
-          heightRule: rowNode.attrs.heightRule ?? 'atLeast',
-        },
-        cells
-      );
+      const info = makeSuggestionInfo(state);
+      let newRow: PMNode;
+      if (info) {
+        newRow = buildSuggestingRow(schema, rowNode, info);
+      } else {
+        const cells: PMNode[] = [];
+        rowNode.forEach((cell) => {
+          const paragraph = schema.nodes.paragraph.create();
+          const cellAttrs = buildCellAttrsFromTemplate(cell);
+          cells.push(schema.nodes.tableCell.create(cellAttrs, paragraph));
+        });
+        newRow = schema.nodes.tableRow.create(
+          {
+            height: rowNode.attrs.height ?? 360,
+            heightRule: rowNode.attrs.heightRule ?? 'atLeast',
+          },
+          cells
+        );
+      }
 
       let rowPos = context.tablePos + 1;
       for (let i = 0; i < context.rowIndex; i++) {
@@ -194,19 +242,25 @@ export function makeAddRowBelow(schema: Schema): Command {
     if (dispatch) {
       const tr = state.tr;
       const rowNode = context.table.child(context.rowIndex);
-      const cells: PMNode[] = [];
-      rowNode.forEach((cell) => {
-        const paragraph = schema.nodes.paragraph.create();
-        const cellAttrs = buildCellAttrsFromTemplate(cell);
-        cells.push(schema.nodes.tableCell.create(cellAttrs, paragraph));
-      });
-      const newRow = schema.nodes.tableRow.create(
-        {
-          height: rowNode.attrs.height ?? 360,
-          heightRule: rowNode.attrs.heightRule ?? 'atLeast',
-        },
-        cells
-      );
+      const info = makeSuggestionInfo(state);
+      let newRow: PMNode;
+      if (info) {
+        newRow = buildSuggestingRow(schema, rowNode, info);
+      } else {
+        const cells: PMNode[] = [];
+        rowNode.forEach((cell) => {
+          const paragraph = schema.nodes.paragraph.create();
+          const cellAttrs = buildCellAttrsFromTemplate(cell);
+          cells.push(schema.nodes.tableCell.create(cellAttrs, paragraph));
+        });
+        newRow = schema.nodes.tableRow.create(
+          {
+            height: rowNode.attrs.height ?? 360,
+            heightRule: rowNode.attrs.heightRule ?? 'atLeast',
+          },
+          cells
+        );
+      }
 
       let rowPos = context.tablePos + 1;
       for (let i = 0; i <= context.rowIndex; i++) {

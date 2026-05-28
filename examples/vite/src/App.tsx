@@ -5,6 +5,9 @@ import {
   acceptChangeById,
   rejectChangeById,
 } from '@eigenpal/docx-editor-core/prosemirror/commands';
+import { makeAddRowBelow } from '@eigenpal/docx-editor-core/prosemirror/extensions/nodes/TableExtension/commands/insert';
+import { deleteRow } from '@eigenpal/docx-editor-core/prosemirror/extensions/nodes/TableExtension/commands/delete';
+import { TextSelection } from 'prosemirror-state';
 import { DocxEditor, type DocxEditorRef } from '@eigenpal/docx-editor-react';
 import {
   AgentChatLog,
@@ -323,6 +326,58 @@ export function App() {
         const table = schema.node('table', {}, [row]);
         view.dispatch(view.state.tr.replaceSelectionWith(table));
         return true;
+      },
+      // Test-only: count the rows of the first table in the doc.
+      countTableRows: () => {
+        const view = editorRef.current?.getEditorRef()?.getView?.();
+        if (!view) return 0;
+        let count = 0;
+        let inFirstTable = false;
+        view.state.doc.descendants((node) => {
+          if (node.type.name === 'table') {
+            if (inFirstTable) return false;
+            inFirstTable = true;
+            return true;
+          }
+          if (inFirstTable && node.type.name === 'tableRow') count += 1;
+          return false;
+        });
+        return count;
+      },
+      // Test-only: place the caret inside the first cell of the first
+      // table in the doc so suggesting-mode commands like `addRowBelow`
+      // have a row index to work with.
+      focusFirstTableCell: () => {
+        const view = editorRef.current?.getEditorRef()?.getView?.();
+        if (!view) return false;
+        let target: number | null = null;
+        view.state.doc.descendants((node, pos) => {
+          if (target != null) return false;
+          if (node.type.name === 'tableCell' || node.type.name === 'tableHeader') {
+            target = pos + 2; // inside first paragraph of cell
+            return false;
+          }
+          return true;
+        });
+        if (target == null) return false;
+        const tr = view.state.tr.setSelection(TextSelection.create(view.state.doc, target));
+        view.dispatch(tr);
+        view.focus();
+        return true;
+      },
+      // Test-only: dispatch the `addRowBelow` table command. Suggesting-mode
+      // active → sets `trIns` on the new row + `cellMarker: ins` on each cell.
+      addRowBelow: () => {
+        const view = editorRef.current?.getEditorRef()?.getView?.();
+        if (!view) return false;
+        return makeAddRowBelow(view.state.schema)(view.state, view.dispatch);
+      },
+      // Test-only: dispatch the schema-free `deleteRow` table command.
+      // Suggesting-mode active → sets `trDel` on the row + `cellMarker: del`.
+      deleteCurrentRow: () => {
+        const view = editorRef.current?.getEditorRef()?.getView?.();
+        if (!view) return false;
+        return deleteRow(view.state, view.dispatch);
       },
       // Test-only: plant trIns on the first table row in the document.
       // Returns false if no table exists.
