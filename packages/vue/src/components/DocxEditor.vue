@@ -372,7 +372,7 @@ import VerticalRuler from './ui/VerticalRuler.vue';
 import DocxEditorMenuBar from './DocxEditor/DocxEditorMenuBar.vue';
 import DocxEditorDialogs from './DocxEditor/DocxEditorDialogs.vue';
 import DocxEditorOverlays from './DocxEditor/DocxEditorOverlays.vue';
-import HyperlinkPopup, { type HyperlinkPopupData } from './ui/HyperlinkPopup.vue';
+import HyperlinkPopup from './ui/HyperlinkPopup.vue';
 import type { TrackedChangeEntry } from './sidebar/sidebarUtils';
 import type { EditorMode, DocxEditorProps } from './DocxEditor/types';
 import { useDocxEditor } from '../composables/useDocxEditor';
@@ -715,7 +715,6 @@ const {
   handleDocxFileChange,
   handleDocumentNameChange,
   downloadCurrentDocument,
-  emitReadyAfterSidebarStateRefresh,
   loadDocumentBuffer,
   loadDocument,
   save,
@@ -791,10 +790,8 @@ const {
   handleCommentReply,
   handleCommentUnresolve,
   handleCommentDelete,
-  handleAcceptChange,
-  handleRejectChange,
-  handleAcceptChangeById,
-  handleRejectChangeById,
+  handleAcceptChange, handleRejectChange,
+  handleAcceptChangeById, handleRejectChangeById,
   handleTrackedChangeReply,
 } = useCommentManagement({
   editorView,

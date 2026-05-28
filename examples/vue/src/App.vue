@@ -73,9 +73,9 @@ import { setSuggestionMode } from '@eigenpal/docx-editor-core/prosemirror/plugin
 import {
   acceptChangeById,
   rejectChangeById,
+  addRowBelow,
+  deleteRow,
 } from '@eigenpal/docx-editor-core/prosemirror/commands';
-import { makeAddRowBelow } from '@eigenpal/docx-editor-core/prosemirror/extensions/nodes/TableExtension/commands/insert';
-import { deleteRow } from '@eigenpal/docx-editor-core/prosemirror/extensions/nodes/TableExtension/commands/delete';
 import { TextSelection } from 'prosemirror-state';
 import type { Node as PMNode } from 'prosemirror-model';
 
@@ -477,7 +477,7 @@ onMounted(async () => {
       addRowBelow: () => {
         const view = (editorRef.value?.getEditorRef() as any)?.getView?.();
         if (!view) return false;
-        return makeAddRowBelow(view.state.schema)(view.state, view.dispatch);
+        return addRowBelow(view.state, view.dispatch);
       },
       deleteCurrentRow: () => {
         const view = (editorRef.value?.getEditorRef() as any)?.getView?.();
