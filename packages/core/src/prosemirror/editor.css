@@ -768,17 +768,26 @@
   background-color: #c62828;
 }
 
-/* Whole-table tracked insertion / deletion — one tall bar on the table
-   itself (renderTable suppresses per-row bars in this case to avoid
-   double-painting). `box-shadow` instead of `::before` because the
-   painter wraps `.layout-table` with `overflow: hidden` (clips children
-   and pseudo-elements outside the box). The inset shadow paints just
-   inside the left edge — looks like a fat colored left border. */
-.layout-table.ep-revision-table.ep-revision-ins {
-  box-shadow: inset 4px 0 0 #2e7d32;
+/* Whole-table tracked insertion / deletion — one tall bar in the page
+   margin to the LEFT of the table. Matches the paragraph change-bar
+   visual (`.layout-revision-pmark::before`) so the user sees a
+   consistent margin indicator for any tracked block. The painter sets
+   `overflow: visible` on tracked tables so this pseudo can extend
+   beyond the table's own bounds into the page padding area. */
+.layout-table.ep-revision-table::before {
+  content: '';
+  position: absolute;
+  left: -10px;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  pointer-events: none;
 }
-.layout-table.ep-revision-table.ep-revision-del {
-  box-shadow: inset 4px 0 0 #c62828;
+.layout-table.ep-revision-table.ep-revision-ins::before {
+  background-color: #2e7d32;
+}
+.layout-table.ep-revision-table.ep-revision-del::before {
+  background-color: #c62828;
 }
 /* Hidden PM DOM path — kept for the off-screen editing surface. */
 .ep-revision-row:not(.layout-table-row).ep-revision-ins > * {

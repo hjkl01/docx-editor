@@ -813,6 +813,10 @@ export function renderTableFragment(
     tableEl.dataset.revisionId = String(tableRev.revisionId);
     tableEl.dataset.revisionAuthor = tableRev.author;
     if (tableRev.date) tableEl.dataset.revisionDate = tableRev.date;
+    // The bar belongs in the document margin (matches paragraph change
+    // bar visual), so allow overflow so the ::before pseudo at left:-10px
+    // extends past the table's left edge into the page padding area.
+    tableEl.style.overflow = 'visible';
   }
 
   // Add column resize handles at each column boundary
