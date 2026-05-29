@@ -453,11 +453,30 @@ export function extractTrackedChanges(state: EditorState | null): TrackedChanges
       }
     }
   }
-  const deduped = final.filter((e) => {
-    if (e.type !== 'paragraphMarkInsertion' && e.type !== 'paragraphMarkDeletion') {
-      return true;
+  // A tableInserted/tableDeleted entry covers the whole table — when an
+  // inline insertion/deletion shares its triple (typed in a cell of the
+  // freshly inserted table), the inline card is redundant. Hide it; the
+  // table card already represents the whole conceptual edit and one
+  // Accept clears every site.
+  const tableKeys = new Set<string>();
+  for (const e of final) {
+    if (e.type === 'tableInserted' || e.type === 'tableDeleted') {
+      tableKeys.add(`${e.revisionId}|${e.author}|${e.date ?? ''}`);
     }
-    return !inlineKeys.has(`${e.revisionId}|${e.author}|${e.date ?? ''}`);
+  }
+  const deduped = final.filter((e) => {
+    const key = `${e.revisionId}|${e.author}|${e.date ?? ''}`;
+    if (e.type === 'paragraphMarkInsertion' || e.type === 'paragraphMarkDeletion') {
+      return !inlineKeys.has(key) && !tableKeys.has(key);
+    }
+    if (e.type === 'insertion' || e.type === 'deletion') {
+      return !tableKeys.has(key);
+    }
+    if (e.type === 'replacement') {
+      const insKey = `${e.insertionRevisionId ?? ''}|${e.author}|${e.date ?? ''}`;
+      return !tableKeys.has(key) && !tableKeys.has(insKey);
+    }
+    return true;
   });
   return { entries: deduped, commentToRevision };
 }

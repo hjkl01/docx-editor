@@ -129,6 +129,28 @@ function findAdjacentRevision(
         if (hit) return hit;
       }
     }
+    // Typing inside a tracked-inserted cell — inherit the cell's
+    // `cellMarker` revision so the cell content folds into the
+    // surrounding "Inserted table" entry. Without this, every typing
+    // session inside a freshly tracked table mints a new revisionId
+    // and the user sees a separate card per cell. Same idea for
+    // tracked-deleted cells.
+    if (markTypeName === 'insertion' || markTypeName === 'deletion') {
+      const wantedKind = markTypeName === 'insertion' ? 'ins' : 'del';
+      for (let d = $pos.depth; d > 0; d--) {
+        const node = $pos.node(d);
+        const isCell = node.type.name === 'tableCell' || node.type.name === 'tableHeader';
+        if (!isCell) continue;
+        const marker = node.attrs.cellMarker as {
+          kind: 'ins' | 'del' | 'merge';
+          info: MarkAttrs;
+        } | null;
+        if (marker && marker.kind === wantedKind && marker.info && marker.info.author === author) {
+          return marker.info;
+        }
+        break; // only check the immediate parent cell
+      }
+    }
   } catch {
     /* position out of range */
   }
