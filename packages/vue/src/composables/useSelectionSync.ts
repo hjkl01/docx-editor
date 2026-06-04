@@ -29,6 +29,15 @@ import { Z_INDEX } from '../styles/zIndex';
 export interface UseSelectionSyncOptions {
   editorView: Ref<EditorView | null>;
   pagesRef: Ref<HTMLElement | null>;
+  /**
+   * Current zoom factor. The caret + selection rects are painted into the
+   * `.docx-editor-vue__pages` container, which carries `transform: scale(zoom)`.
+   * `getBoundingClientRect` returns post-transform (viewport) coordinates, so
+   * the rects must be divided by zoom to land in the container's own
+   * coordinate space — otherwise the parent's scale multiplies them a second
+   * time and the highlight drifts off the text at any zoom ≠ 100%.
+   */
+  zoom: Ref<number>;
   selectedImage: ShallowRef<ImageSelectionInfo | null>;
   /**
    * True while the user is editing a header/footer. When set, the body PM's
@@ -154,6 +163,15 @@ export function useSelectionSync(opts: UseSelectionSyncOptions): UseSelectionSyn
     const scrollTop = container.scrollTop;
     const scrollLeft = container.scrollLeft;
 
+    // The container is scaled via `transform: scale(zoom)`, but the geometry
+    // from `getBoundingClientRect`/`getClientRects` is post-transform px.
+    // Divide those by zoom so the overlay divs — children of the scaled
+    // container — render at the right spot once the parent's scale is applied.
+    // (The caret *height* is the exception: it comes from `offsetHeight`, a
+    // layout-px value the transform doesn't touch, so it's used as-is and the
+    // parent's scale grows it to match the line.)
+    const zoom = opts.zoom.value || 1;
+
     if (empty) {
       // Draw blinking caret
       const overlayRect = container.getBoundingClientRect();
@@ -163,8 +181,8 @@ export function useSelectionSync(opts: UseSelectionSyncOptions): UseSelectionSyn
         el.className = 'vue-caret';
         el.style.cssText = `
           position: absolute;
-          left: ${caret.x + scrollLeft}px;
-          top: ${caret.y + scrollTop}px;
+          left: ${caret.x / zoom + scrollLeft}px;
+          top: ${caret.y / zoom + scrollTop}px;
           width: 2px;
           height: ${caret.height}px;
           background: #000;
@@ -193,10 +211,10 @@ export function useSelectionSync(opts: UseSelectionSyncOptions): UseSelectionSyn
       el.className = 'vue-sel-rect';
       el.style.cssText = `
         position: absolute;
-        left: ${rect.x + scrollLeft}px;
-        top: ${rect.y + scrollTop}px;
-        width: ${rect.width}px;
-        height: ${rect.height}px;
+        left: ${rect.x / zoom + scrollLeft}px;
+        top: ${rect.y / zoom + scrollTop}px;
+        width: ${rect.width / zoom}px;
+        height: ${rect.height / zoom}px;
         background: rgba(66, 133, 244, 0.3);
         pointer-events: none;
         z-index: ${Z_INDEX.selectionOverlay};
