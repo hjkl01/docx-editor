@@ -98,6 +98,9 @@ export function collectFootnoteRefs(blocks: FlowBlock[]): Array<{
     pmPos: number;
 }>;
 
+// @public (undocumented)
+export function columnWidthForSection(config: SectionLayoutConfig): number;
+
 // @public
 export function computeHfCaretRectFromView(view: EditorView, section: 'header' | 'footer', doc?: globalThis.Document): {
     top: number;
@@ -112,6 +115,9 @@ export function computeHfSelectionRectsFromView(view: EditorView, section: 'head
     width: number;
     height: number;
 }>;
+
+// @public
+export function computePerBlockWidths(blocks: FlowBlock[], initialConfig: SectionLayoutConfig, finalConfig: SectionLayoutConfig): number[];
 
 // @public
 export function contributesToHeaderFooterFlowHeight(block: FlowBlock): boolean;
@@ -350,6 +356,9 @@ export function getCaretPosition(layout: Layout, blocks: FlowBlock[], measures: 
 
 // @public (undocumented)
 export function getCaretPositionFromDom(container: HTMLElement, pmPos: number, overlayRect: DOMRect): DomCaretPosition | null;
+
+// @public
+export function getColumns(sectionProps: SectionProperties | null | undefined): ColumnLayout | undefined;
 
 // @public (undocumented)
 export function getFloatingMargins(lineY: number, lineHeight: number, zones: FloatingImageZone[] | undefined, paragraphYOffset: number): FloatingLineMargins;
@@ -724,6 +733,9 @@ export type ToFlowBlocksOptions = {
     listCounters?: Map<number, number[]>;
     listSeenNumIds?: Set<string>;
 };
+
+// @public
+export function twipsToPixels(twips: number): number;
 
 // @public
 export function twipsToPx(twips: number): number;
