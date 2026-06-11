@@ -789,19 +789,23 @@ export function measureParagraph(
       const imageWidth = run.width;
       const imageHeight = run.height;
 
+      if (currentLine.width + imageWidth > currentLine.availableWidth + WIDTH_TOLERANCE) {
+        // Image doesn't fit, start new line
+        startNewLine(runIndex, 0);
+      }
+
       // The image's vertical footprint in the line includes its wrap
       // distances (wp:inline distT/distB). These default to 0 for inline
       // images (unlike the block path's synthetic 6px). The painter applies
       // them as top/bottom margins on the <img>, so the run's flex baseline
       // (the margin-box edge) stays consistent with this reserved height.
+      // Record it only after the wrap check above — the footprint belongs to
+      // the line the image actually lands on, not the line it wrapped away
+      // from (else the previous line inflates and this one stays text-height,
+      // and everything after paints over the overflowing image — #766).
       const imageFootprintPx = imageHeight + (run.distTop ?? 0) + (run.distBottom ?? 0);
       if (imageFootprintPx > currentLine.maxImageHeightPx) {
         currentLine.maxImageHeightPx = imageFootprintPx;
-      }
-
-      if (currentLine.width + imageWidth > currentLine.availableWidth + WIDTH_TOLERANCE) {
-        // Image doesn't fit, start new line
-        startNewLine(runIndex, 0);
       }
 
       currentLine.width += imageWidth;
